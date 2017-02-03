@@ -1,0 +1,12 @@
+hyperg.db
+node_modules
+logs
+coverage
+
+dist/*
+
+*.log
+npm-debug.log*
+
+.npm
+.node_repl_history

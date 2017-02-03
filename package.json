@@ -1,0 +1,33 @@
+{
+  "name": "golem-hyperdrive",
+  "version": "0.1.1",
+  "description": "Hyperdrive client for the Golem project",
+  "author": "Marek Franciszkiewicz",
+  "keywords": [
+    "p2p",
+    "replication"
+  ],
+  "bin": {
+    "hyperg": "src/main.js",
+    "hyperg-client": "src/client.js"
+  },
+  "scripts": {
+    "dist:deps:sodium": "cp node_modules/sodium-prebuilt/build/Release/sodium.node dist/",
+    "dist:deps:rabin": "cp node_modules/rabin/build/Release/rabin.node dist/",
+    "dist:deps": "mkdir -p dist && npm run dist:deps:sodium && npm run dist:deps:rabin",
+    "dist:main": "enclose -c enclose.conf -o dist/hyperg src/main.js",
+    "dist:client": "enclose -c enclose.conf -o dist/hyperg-client src/client.js",
+    "dist": "npm run dist:deps && npm run dist:main && npm run dist:client",
+    "clean": "rm -rf dist/*"
+  },
+  "dependencies": {
+    "minimist": "1.2.0",
+    "mkdirp": "^0.5.1",
+    "level": "^1.5.0",
+    "pump": "^1.0.2",
+    "datland-swarm-defaults": "^1.0.0",
+    "discovery-swarm": "^4.0.2",
+    "hyperdiscovery": "^1.0.1",
+    "hyperdrive": "^7.9.0"
+  }
+}
