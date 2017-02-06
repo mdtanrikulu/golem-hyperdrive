@@ -13,6 +13,14 @@ RPC.prototype.listen = function() {
     self.server = http.createServer((request, response) => {
         self._route(self, request, response);
     });
+
+    self.server.on('error', error => {
+        console.error('Hyperdrive: Error listening on',
+                      self.host + ':' + self.port,
+                      ':', error.code);
+        process.exit(1);
+    });
+
     self.server.listen(self.port, self.host);
 }
 
@@ -70,7 +78,7 @@ RPC.prototype._commands = {
     id: (self, json, response) => {
         self._respond({
             id: self.hyperg.tx_network.id.toString('hex')
-        });
+        }, response);
     },
     download: (self, json, response) => {
         assert.ok(json.hash);

@@ -42,21 +42,28 @@ HyperG.prototype.run = function() {
                 var archive = self._uploads[hash];
                 if (!archive) return connection.close();
 
-                console.info("Uploading", archive.key.toString('hex'));
+                console.info("Hyperdrive: uploading", archive.key.toString('hex'));
 
                 connection.pipe(archive.replicate({
                     download: false,
                     upload: true
                 })).pipe(connection);
             } else
-                console.error('Unknown hash requested', hash);
+                console.error('Hyperdrive: unknown hash requested', hash);
         });
+    });
+
+    self.tx_network.on('error', error => {
+        console.error('Error:', error);
+        self.exit();
+    });
+
+    self.tx_network.on('listening', () => {
+        console.info("Hyperdrive is ready");
     });
 
     self.expose_rpc();
     self.tx_network.listen(self.options.tx_port);
-
-    console.info("Golem-hyperdrive is ready");
 }
 
 HyperG.prototype.upload = function(id, files) {
@@ -73,8 +80,9 @@ HyperG.prototype.upload = function(id, files) {
                 if (hash in self._uploads)
                     self.cancel_upload(hash);
 
-                console.info("Sharing", hash);
-                self._uploads[hash] = archive;                
+                console.info("Hyperdrive: sharing", hash);
+
+                self._uploads[hash] = archive;
                 self.tx_network.join(archive.discoveryKey);
                 cb(hash);
             }
@@ -90,7 +98,7 @@ HyperG.prototype.download = function(hash, destination) {
     network.listen(0);
 
     self.rx_networks[hash + destination] = network;
-    console.info("Downloading", hash);
+    console.info("Hyperdrive: downloading", hash);
 
     return new Promise((cb, eb) => {
         var archive = self.hyperdrive.createArchive(hash);
@@ -114,8 +122,8 @@ HyperG.prototype._on_download_connection = function(connection, info, archive,
 
     Archiver.get(archive, destination, (file, error, left) => {
         files.push(file);
-        
-        if (error) errback(error);        
+
+        if (error) errback(error);
         if (left <= 0) callback(files);
     });
 }
@@ -136,7 +144,7 @@ HyperG.prototype._read = function(connection, count, callback) {
 HyperG.prototype.cancel_upload = function(hash) {
     var exists = hash in self._uploads;
     if (exists) {
-        console.info("Cancelling", hash);
+        console.info("Hyperdrive: cancelling", hash);
         delete self._uploads[hash];
         self.tx_network.leave(hash);
     }
