@@ -49,7 +49,7 @@ HyperG.prototype.run = function() {
                     upload: true
                 })).pipe(connection);
             } else
-                console.error('Hyperdrive: unknown hash requested', hash);
+                console.error('Hyperdrive: unknown hash requested', hash.toString('hex'));
         });
     });
 
@@ -114,17 +114,18 @@ HyperG.prototype._on_download_connection = function(connection, info, archive,
                                                     destination, callback, errback) {
     var files = [];
 
-    connection.write(archive.key.toString('hex'));
-    connection.pipe(archive.replicate({
-        download: true,
-        upload: false
-    })).pipe(connection);
+    connection.write(archive.key.toString('hex'), null, () => {
+        connection.pipe(archive.replicate({
+            download: true,
+            upload: false
+        })).pipe(connection);
 
-    Archiver.get(archive, destination, (file, error, left) => {
-        files.push(file);
+        Archiver.get(archive, destination, (file, error, left) => {
+            if (error) errback(error);
+            else files.push(file);
 
-        if (error) errback(error);
-        if (left <= 0) callback(files);
+            if (left <= 0) callback(files);
+        });
     });
 }
 
