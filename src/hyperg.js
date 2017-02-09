@@ -10,6 +10,20 @@ const Archiver = require('./archiver');
 const RPC = require('./rpc');
 
 
+/* Patch connections with hashes */
+const _join = discovery.prototype.join;
+const __onconnection = discovery.prototype._onconnection;
+
+discovery.prototype.join = function(name, opts, hash) {
+    this.hash = hash;
+    _join.call(this, name, opts);
+}
+discovery.prototype._onconnection = function(connection, type, peer) {
+    connection.hash = this.hash;
+    __onconnection.call(this, connection, type, peer);
+};
+
+
 function HyperG(options) {
     if (!(this instanceof HyperG))
         return new HyperG(options);
@@ -36,25 +50,12 @@ HyperG.prototype.run = function() {
     self._running = true;
 
     self.tx_network.on('connection', (connection, info) => {
-        self._read(connection, 64, hash => {
-
-            if (hash in self._uploads) {
-                var archive = self._uploads[hash];
-                if (!archive) return connection.close();
-
-                console.info("Hyperdrive: uploading", archive.key.toString('hex'));
-
-                connection.pipe(archive.replicate({
-                    download: false,
-                    upload: true
-                })).pipe(connection);
-            } else
-                console.error('Hyperdrive: unknown hash requested', hash.toString('hex'));
-        });
+        if (!info.initiator)
+            console.info("Hyperdrive: upload  ", connection.hash);
     });
 
     self.tx_network.on('error', error => {
-        console.error('Error:', error);
+        console.error('Hyperdrive error:', error);
         self.exit();
     });
 
@@ -80,10 +81,10 @@ HyperG.prototype.upload = function(id, files) {
                 if (hash in self._uploads)
                     self.cancel_upload(hash);
 
-                console.info("Hyperdrive: sharing", hash);
+                console.info("Hyperdrive: share   ", hash);
 
                 self._uploads[hash] = archive;
-                self.tx_network.join(archive.discoveryKey);
+                self.tx_network.join(archive.discoveryKey, null, hash);
                 cb(hash);
             }
         });
@@ -91,14 +92,13 @@ HyperG.prototype.upload = function(id, files) {
 }
 
 HyperG.prototype.download = function(hash, destination) {
-    /* Create one network per download */
-
+    /* One network per download */
     var self = this;
     var network = self._create_network();
     network.listen(0);
 
     self.rx_networks[hash + destination] = network;
-    console.info("Hyperdrive: downloading", hash);
+    console.info("Hyperdrive: download", hash);
 
     return new Promise((cb, eb) => {
         var archive = self.hyperdrive.createArchive(hash);
@@ -106,7 +106,7 @@ HyperG.prototype.download = function(hash, destination) {
             self._on_download_connection(connection, info, archive,
                                          destination, cb, eb);
         });
-        network.join(archive.discoveryKey);
+        network.join(archive.discoveryKey, null, hash);
     });
 }
 
@@ -114,18 +114,16 @@ HyperG.prototype._on_download_connection = function(connection, info, archive,
                                                     destination, callback, errback) {
     var files = [];
 
-    connection.write(archive.key.toString('hex'), null, () => {
-        connection.pipe(archive.replicate({
-            download: true,
-            upload: false
-        })).pipe(connection);
+    connection.pipe(archive.replicate({
+        download: true,
+        upload: false
+    })).pipe(connection);
 
-        Archiver.get(archive, destination, (file, error, left) => {
-            if (error) errback(error);
-            else files.push(file);
+    Archiver.get(archive, destination, (file, error, left) => {
+        if (error) errback(error);
+        else files.push(file);
 
-            if (left <= 0) callback(files);
-        });
+        if (left <= 0) callback(files);
     });
 }
 
@@ -162,25 +160,26 @@ HyperG.prototype.exit = function(message, code) {
     if (message)
         console.error(message);
 
-    try {
-        for (var key in self.rx_networks) {
-            if (self.rx_networks.hasOwnProperty(key))
-                self.rx_networks[key].close();
-        }
-
-        self.tx_network.close();
-        self.db.close();
-    } catch (e) {
-        console.error(e.message);
+    const _try = fn => {
+        try { fn(); }
+        catch (e) { console.error('Hyperdrive error:', e); }
     }
 
+    for (var key in self.rx_networks)
+        if (self.rx_networks.hasOwnProperty(key))
+            _try(self.rx_networks[key].close);
+
+    _try(self.tx_network.close)
+    _try(self.db.close);
     process.exit(code);
 }
 
-HyperG.prototype._create_network = function() {
-    var network = discovery(defaults(this.options));
+HyperG.prototype._create_network = function(options) {
+    var net_options = Object.assign({}, this.options, options || {});
+    var network = discovery(defaults(net_options));
+
     network.on('error', error => {
-        console.error(error);
+        console.error("Hyperdrive error:", error);
     });
     return network;
 }
