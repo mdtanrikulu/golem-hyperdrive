@@ -1,9 +1,14 @@
 const http = require('http');
 const assert = require('assert');
 
+
+const DEFAULT_HOST = 'localhost';
+const DEFAULT_PORT = 3292;
+
+
 function RPC(hyperg, port, host) {
-    this.port = port || 3292;
-    this.host = host || '127.0.0.1';
+    this.port = port || DEFAULT_PORT;
+    this.host = host || DEFAULT_HOST;
     this.hyperg = hyperg;
 }
 

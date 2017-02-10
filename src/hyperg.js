@@ -12,6 +12,10 @@ const RPC = require('./rpc');
 process.setMaxListeners(0);
 
 
+const DEFAULT_HOST = 'localhost';
+const DEFAULT_PORT = 3282;
+
+
 function HyperG(options) {
     if (!(this instanceof HyperG))
         return new HyperG(options);
@@ -20,7 +24,7 @@ function HyperG(options) {
     this.db = level(options.db || './hyperg.db');
     this.hyperdrive = hyperdrive(this.db);
 
-    this.options.port = this.options.port || 3282;
+    this.options.port = this.options.port || DEFAULT_PORT;
     this.tx_network = this._create_network();
     this.rx_networks = [];
 
@@ -40,12 +44,12 @@ HyperG.prototype.run = function() {
 
             hash = hash.toString('hex');
             if (!(hash in self._uploads)) {
-                console.error("Hyperdrive: Invalid hash", hash.toString(),
+                console.error("HyperG: Invalid hash", hash.toString(),
                               connection._peername);
                 return connection.destroy();
             }
 
-            console.info("Hyperdrive: upload  ", hash.toString(),
+            console.info("HyperG: upload  ", hash.toString(),
                          connection._peername);
 
             var archive = self._uploads[hash];
@@ -63,7 +67,7 @@ HyperG.prototype.run = function() {
     self.tx_network.on('listening', () => {
         self.expose_rpc()
             .then(() => {
-                console.info("Hyperdrive is ready");
+                console.info("HyperG is ready");
             }, error => {
                 self.exit(error);
             });
@@ -87,7 +91,7 @@ HyperG.prototype.upload = function(id, files) {
                 if (hash in self._uploads)
                     self.cancel_upload(hash);
 
-                console.info("Hyperdrive: share   ", hash);
+                console.info("HyperG: share   ", hash);
 
                 self._uploads[hash] = archive;
                 self.tx_network.join(archive.discoveryKey, null, hash);
@@ -104,7 +108,7 @@ HyperG.prototype.download = function(hash, destination) {
     network.listen(0);
     self.rx_networks[hash + destination] = network;
 
-    console.info("Hyperdrive: download", hash);
+    console.info("HyperG: download", hash);
 
     return new Promise((cb, eb) => {
         var archive = self.hyperdrive.createArchive(hash);
@@ -152,14 +156,14 @@ HyperG.prototype._read = function(connection, count, callback) {
 
 HyperG.prototype._log_errors = function(emitter) {
     emitter.on('error', error => {
-        console.error('Hyperdrive error:', error);
+        console.error('HyperG error:', error);
     });
 }
 
 HyperG.prototype.cancel_upload = function(hash) {
-    var exists = hash in self._uploads;
+    const exists = hash in self._uploads;
     if (exists) {
-        console.info("Hyperdrive: cancelling", hash);
+        console.info("HyperG: cancelling", hash);
         self.tx_network.leave(hash);
         delete self._uploads[hash];
     }
@@ -167,7 +171,7 @@ HyperG.prototype.cancel_upload = function(hash) {
 }
 
 HyperG.prototype.expose_rpc = function(port, host) {
-    host = host || '127.0.0.1';
+    host = host || DEFAULT_HOST;
     this.rpc = new RPC(this, port, host);
     return this.rpc.listen();
 }
@@ -178,7 +182,7 @@ HyperG.prototype.exit = function(message, code) {
 
     const _try = fn => {
         try { fn(); }
-        catch (e) { console.error('Hyperdrive error:', e); }
+        catch (e) { console.error('HyperG error:', e); }
     }
 
     for (var key in self.rx_networks)
@@ -191,18 +195,13 @@ HyperG.prototype.exit = function(message, code) {
 }
 
 HyperG.prototype._create_network = function(options) {
-    var net_options = Object.assign({}, this.options, options || {});
-    var network = discovery(defaults(net_options));
+    options = Object.assign({}, this.options, options || {});
+    var network = discovery(defaults(options));
 
     network.on('error', error => {
-        console.error("Hyperdrive error:", error);
+        console.error("HyperG error:", error);
     });
     return network;
-}
-
-HyperG.prototype._can_recover = function(error) {
-    // TODO: implement
-    return false;
 }
 
 module.exports = HyperG;
