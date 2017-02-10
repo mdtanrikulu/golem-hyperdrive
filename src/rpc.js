@@ -21,7 +21,13 @@ RPC.prototype.listen = function() {
         process.exit(1);
     });
 
-    self.server.listen(self.port, self.host);
+    return new Promise((cb, err) => {
+        self.server.once('listening', error => {
+            if (error) err(error);
+            else cb();
+        });
+        self.server.listen(self.port, self.host);
+    });
 }
 
 RPC.prototype._route = function(ctx, request, response) {
