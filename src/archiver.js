@@ -13,10 +13,10 @@ Archiver.add = (archive, entries, callback) => {
         var ws = archive.createFileWriteStream({ name: name });
 
         rs.on('error', rs_error => {
-            console.error('HyperG: get ReadStream error:', rs_error);
+            console.error('HyperG: add ReadStream error:', rs_error);
         });
         ws.on('error', ws_error => {
-            console.error('HyperG: get WriteStream error:', rs_error);
+            console.error('HyperG: add WriteStream error:', rs_error);
         });
 
         pump(rs, ws, error => {
