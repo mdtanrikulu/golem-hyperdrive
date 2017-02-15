@@ -9,8 +9,16 @@ Archiver.add = (archive, entries, callback) => {
     var left = entries.length;
     asyncEach(entries, entry => {
         const source = entry[0], name = entry[1];
-        const rs = fs.createReadStream(source);
-        const ws = archive.createFileWriteStream({ name: name });
+        var rs = fs.createReadStream(source);
+        var ws = archive.createFileWriteStream({ name: name });
+
+        rs.on('error', rs_error => {
+            console.error('HyperG: get ReadStream error:', rs_error);
+        });
+        ws.on('error', ws_error => {
+            console.error('HyperG: get WriteStream error:', rs_error);
+        });
+
         pump(rs, ws, error => {
             callback(source, error, --left);
         });
@@ -27,8 +35,16 @@ Archiver.get = (archive, destination, callback) => {
 
             mkdirp(path.dirname(dst), error => {
                 if (error) return callback(dst, error, left);
-                const rs = archive.createFileReadStream(entry);
-                const ws = fs.createWriteStream(dst);
+                var rs = archive.createFileReadStream(entry);
+                var ws = fs.createWriteStream(dst);
+
+                rs.on('error', rs_error => {
+                    console.error('HyperG: get ReadStream error:', rs_error);
+                });
+                ws.on('error', ws_error => {
+                    console.error('HyperG: get WriteStream error:', rs_error);
+                });
+
                 pump(rs, ws, error => {
                     callback(dst, error, --left);
                 });

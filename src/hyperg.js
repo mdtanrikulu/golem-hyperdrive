@@ -56,7 +56,16 @@ HyperG.prototype.run = function() {
             connection.pipe(archive.replicate({
                 download: false,
                 upload: true
-            })).pipe(connection);
+            }))
+            .on('error', err => {
+                console.error("HyperG: Archive replication error:", err);
+                connection.destroy();
+            })
+            .pipe(connection)
+            .on('error', err => {
+                console.error("HyperG: Connection replication error:", err);
+                connection.destroy();
+            });
         });
     });
 
@@ -132,11 +141,24 @@ HyperG.prototype._on_download_connection = function(connection, info, archive,
         connection.pipe(archive.replicate({
             download: true,
             upload: false
-        })).pipe(connection);
+        }))
+        .on('error', err => {
+            console.error("HyperG: Archive replication error:", err);
+            connection.destroy();
+        })
+        .pipe(connection)
+        .on('error', err => {
+            console.error("HyperG: Connection replication error:", err);
+            connection.destroy();
+        });
 
         Archiver.get(archive, destination, (file, error, left) => {
-            if (error) errback(error);
-            else files.push(file);
+            if (error) {
+                errback(error);
+                connection.destroy();
+            } else
+                files.push(file);
+
             if (left <= 0) callback(files);
         });
     });
