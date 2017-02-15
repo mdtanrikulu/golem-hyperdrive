@@ -37,8 +37,12 @@ function request(json, options) {
         }).on('end', () => {
             console.log(body.join(''));
         }).on('error', error => {
-            console.error('!', error);
+            console.error('HyperG: response error:', error);
         });
+    });
+
+    request.on('error', error => {
+        console.error('HyperG: request error:', error);
     });
 
     request.write(post_data);

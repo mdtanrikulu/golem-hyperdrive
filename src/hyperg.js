@@ -11,8 +11,8 @@ const RPC = require('./rpc');
 
 process.setMaxListeners(0);
 
-
-const DEFAULT_HOST = 'localhost';
+/* TODO: make configurable (tcp and udp) */
+const DEFAULT_HOST = '0.0.0.0';
 const DEFAULT_PORT = 3282;
 
 
@@ -77,6 +77,7 @@ HyperG.prototype.run = function() {
         self.expose_rpc()
             .then(() => {
                 console.info("HyperG is ready");
+                console.info(self.tx_network.id.toString('hex'));
             }, error => {
                 self.exit(error);
             });
