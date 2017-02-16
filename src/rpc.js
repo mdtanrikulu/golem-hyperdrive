@@ -78,6 +78,7 @@ RPC.prototype._route = function(ctx, request, response) {
         try {
             self._commands[json.command](self, json, response);
         } catch(exc) {
+            console.error('err', exc);
             return self._respond({
                 error: exc.message
             }, response, 400);
@@ -88,7 +89,7 @@ RPC.prototype._route = function(ctx, request, response) {
 RPC.prototype._commands = {
     id: (self, json, response) => {
         self._respond({
-            id: self.hyperg.tx_network.id.toString('hex')
+            id: self.hyperg.id
         }, response);
     },
     download: (self, json, response) => {
@@ -101,20 +102,20 @@ RPC.prototype._commands = {
                     files: success
                 }, response);
             }, error => {
+                console.error("RPC dl error", error);
                 self._respond({
                     error: error
                 }, response, 400);
             });
     },
     upload: (self, json, response) => {
-        assert.ok(json.id);
-
         try {
             json.files = Object.keys(json.files)
                 .map(key => {
                     return [key, json.files[key]];
                 });
         } catch (error) {
+            console.error("RPC upl error", error);
             return self._respond({
                     error: error.message
                 }, response, 400);
@@ -126,6 +127,7 @@ RPC.prototype._commands = {
                     hash: success
                 }, response);
             }, error => {
+                console.error("RPC upl error", error);
                 self._respond({
                     error: error
                 }, response, 400);

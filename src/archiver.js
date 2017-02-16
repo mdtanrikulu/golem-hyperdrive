@@ -27,11 +27,13 @@ Archiver.add = (archive, entries, callback) => {
 
 Archiver.get = (archive, destination, callback) => {
     var download = (error, entries) => {
-        if (error) return callback(undefined, error);
-
         var left = entries.length;
+        if (error) return callback(undefined, error, left);
+
         asyncEach(entries, entry => {
             const dst = path.join(destination, entry.name);
+            //if (archive.isEntryDownloaded(entry))
+            //    return callback(dst, undefined, --left);
 
             mkdirp(path.dirname(dst), error => {
                 if (error) return callback(dst, error, left);
