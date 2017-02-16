@@ -32,8 +32,11 @@ Archiver.get = (archive, destination, callback) => {
 
         asyncEach(entries, entry => {
             const dst = path.join(destination, entry.name);
-            //if (archive.isEntryDownloaded(entry))
-            //    return callback(dst, undefined, --left);
+
+            // if (archive.isEntryDownloaded(entry)) {
+            //     console.log("Already downloaded", entry);
+            //     return callback(dst, undefined, --left);
+            // }
 
             mkdirp(path.dirname(dst), error => {
                 if (error) return callback(dst, error, left);

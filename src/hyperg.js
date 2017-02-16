@@ -52,13 +52,9 @@ HyperG.prototype.upload = function(id, files) {
                 archive.finalize();
 
                 var hash = archive.key.toString('hex');
-                var network = self._create_network();
-
+                var network = self._create_network(archive, false);
                 self.tx_networks[hash] = network;
 
-                network.on('connection', (connection, info) => {
-                    self._on_upload_connection(archive, connection, info);
-                });
                 network.listen(0);
                 network.join(archive.discoveryKey);
 
@@ -70,67 +66,26 @@ HyperG.prototype.upload = function(id, files) {
 }
 
 HyperG.prototype.download = function(hash, destination) {
-    var self = this;
+    var self = this, files = [];
     var archive = self.hyperdrive.createArchive(hash);
-    var network = self._create_network();
-    var network_key = uuid();
+    var network = self._create_network(archive);
 
     network.listen(0);
-    self.rx_networks[network_key] = network;
+    network.join(archive.discoveryKey);
+    self.rx_networks[uuid()] = network;
 
     console.info("HyperG: download", hash);
 
     return new Promise((cb, eb) => {
-        network.once('connection', (connection, info) => {
-            self._on_download_connection(connection, info, archive,
-                                         network_key, destination,
-                                         cb, eb);
+        archive.open(error => {
+            if (error) return eb(error);
+
+            Archiver.get(archive, destination, (file, error, left) => {
+                if (error) return eb(error);
+                files.push(file);
+                if (left <= 0) cb(files);
+            });
         });
-        network.join(archive.discoveryKey, null, hash);
-    });
-}
-
-HyperG.prototype._on_upload_connection = function(archive, connection, info) {
-    this._log_errors(connection);
-
-    connection.pipe(archive.replicate({
-        download: false
-    }))
-    .on('error', err => {
-        console.error("HyperG: Archive replication error:", err);
-    })
-    .pipe(connection)
-    .on('error', err => {
-        console.error("HyperG: Connection replication error:", err);
-    });
-}
-
-HyperG.prototype._on_download_connection = function(connection, info, archive, key,
-                                                    destination, callback, errback) {
-    this._log_errors(connection);
-
-    var self = this;
-    var files = [];
-
-    connection.pipe(archive.replicate())
-    .on('error', err => {
-        console.error("HyperG: Archive replication error:", err);
-    })
-    .pipe(connection)
-    .on('error', err => {
-        console.error("HyperG: Connection replication error:", err);
-    });
-
-    Archiver.get(archive, destination, (file, error, left) => {
-        if (error)
-            return errback(error);
-        else
-            files.push(file);
-
-        if (left <= 0) {
-            callback(files);
-            self.cancel_download(key);
-        }
     });
 }
 
@@ -191,8 +146,18 @@ HyperG.prototype.exit = function(message, code) {
     process.exit(code);
 }
 
-HyperG.prototype._create_network = function(options) {
-    options = Object.assign({}, this.options, options || {});
+HyperG.prototype._create_network = function(archive, download) {
+    options = Object.assign({
+        id: archive.id,
+        hash: false,
+        stream: peer => {
+            return archive.replicate({
+                upload: true,
+                download: download === false ? false : true
+            })
+        },
+    }, this.options);
+
     var network = discovery(defaults(options));
     this._log_errors(network);
     return network;
