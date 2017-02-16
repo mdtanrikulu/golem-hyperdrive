@@ -56,7 +56,7 @@ HyperG.prototype.upload = function(id, files) {
 
                 self.tx_networks[hash] = network;
 
-                network.once('connection', (connection, info) => {
+                network.on('connection', (connection, info) => {
                     self._on_upload_connection(archive, connection, info);
                 });
                 network.listen(0);
