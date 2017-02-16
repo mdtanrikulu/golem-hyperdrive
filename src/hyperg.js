@@ -43,11 +43,9 @@ HyperG.prototype.run = function() {
         self._read(connection, 32, hash => {
 
             hash = hash.toString('hex');
-            if (!(hash in self._uploads)) {
-                console.error("HyperG: Invalid hash", hash.toString(),
-                              connection._peername);
-                return connection.destroy();
-            }
+            if (!(hash in self._uploads))
+                return console.error("HyperG: Invalid hash", hash.toString(),
+                                     connection._peername);
 
             console.info("HyperG: upload  ", hash.toString(),
                          connection._peername);
@@ -59,12 +57,10 @@ HyperG.prototype.run = function() {
             }))
             .on('error', err => {
                 console.error("HyperG: Archive replication error:", err);
-                connection.destroy();
             })
             .pipe(connection)
             .on('error', err => {
                 console.error("HyperG: Connection replication error:", err);
-                connection.destroy();
             });
         });
     });
@@ -73,7 +69,7 @@ HyperG.prototype.run = function() {
         self.exit(error);
     });
 
-    self.tx_network.on('listening', () => {
+    self.tx_network.once('listening', () => {
         self.expose_rpc()
             .then(() => {
                 console.info("HyperG is ready");
