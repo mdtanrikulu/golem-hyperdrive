@@ -3,6 +3,9 @@ const mkdirp = require('mkdirp');
 const path = require('path');
 const pump = require('pump');
 
+const rel_re = /^(\.\.[\/\\])+/;
+
+
 function Archiver() {}
 
 Archiver.add = (archive, entries, callback) => {
@@ -31,12 +34,11 @@ Archiver.get = (archive, destination, callback) => {
         if (error) return callback(undefined, error, left);
 
         asyncEach(entries, entry => {
-            const dst = path.join(destination, entry.name);
+            const rel = path.normalize(entry.name).replace(rel_re, '');
+            const dst = path.join(destination, rel);
 
-            // if (archive.isEntryDownloaded(entry)) {
-            //     console.log("Already downloaded", entry);
-            //     return callback(dst, undefined, --left);
-            // }
+            if (archive.isEntryDownloaded(entry) && fs.existsSync(dst))
+                return callback(dst, undefined, --left);
 
             mkdirp(path.dirname(dst), error => {
                 if (error) return callback(dst, error, left);
