@@ -153,8 +153,8 @@ HyperG.prototype._create_network = function(archive, download) {
         stream: peer => {
             return archive.replicate({
                 upload: true,
-                download: download === false ? false : true
-            })
+                download: download !== false
+            });
         },
     }, this.options);
 
