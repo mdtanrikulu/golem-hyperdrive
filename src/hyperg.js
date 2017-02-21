@@ -45,22 +45,30 @@ HyperG.prototype.upload = function(id, files) {
     var self = this;
     var archive = self.hyperdrive.createArchive();
 
-    return new Promise((cb, err) => {
-        Archiver.add(archive, files, (file, error, left) => {
-            if (error) return err(error);
-            if (left <= 0) {
-                archive.finalize();
+    return new Promise((cb, eb) => {
 
-                var hash = archive.key.toString('hex');
-                var network = self._create_network(archive, false);
-                self.tx_networks[hash] = network;
+        const on_finalize = error => {
+            if (error) return eb(error);
 
-                network.listen(0);
-                network.join(archive.discoveryKey);
+            var hash = archive.key.toString('hex');
+            var network = self._create_network(archive, false);
 
+            network.once('listening', () => {
                 console.info("HyperG: upload  ", hash);
+                self.tx_networks[hash] = network;
                 cb(hash);
-            }
+            });
+            network.once('error', err => {
+                eb(err);
+            });
+
+            network.listen(0);
+            network.join(archive.discoveryKey);
+        };
+
+        Archiver.add(archive, files, (file, error, left) => {
+            if (error) return eb(error);
+            if (left <= 0) archive.finalize(on_finalize);
         });
     });
 }
