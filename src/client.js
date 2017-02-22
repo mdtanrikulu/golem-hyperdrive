@@ -45,6 +45,7 @@ function request(json, options) {
         console.error('HyperG: request error:', error);
     });
 
+    request.setSocketKeepAlive(true);
     request.write(post_data);
     request.end();
 }
