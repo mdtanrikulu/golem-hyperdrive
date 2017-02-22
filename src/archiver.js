@@ -16,7 +16,7 @@ Archiver.add = (archive, entries, callback) => {
             console.error('HyperG: add ReadStream error:', rs_error);
         });
         ws.on('error', ws_error => {
-            console.error('HyperG: add WriteStream error:', rs_error);
+            console.error('HyperG: add WriteStream error:', ws_error);
         });
 
         pump(rs, ws, error => {
@@ -47,7 +47,7 @@ Archiver.get = (archive, destination, callback) => {
                     console.error('HyperG: get ReadStream error:', rs_error);
                 });
                 ws.on('error', ws_error => {
-                    console.error('HyperG: get WriteStream error:', rs_error);
+                    console.error('HyperG: get WriteStream error:', ws_error);
                 });
 
                 pump(rs, ws, error => {
