@@ -138,7 +138,7 @@ RPC.prototype._commands = {
 
         if (self.hyperg.cancel_upload(json.hash))
             self._respond({
-                ok: json.hash
+               hash: json.hash
             }, response);
         else
             self._respond({
