@@ -76,7 +76,7 @@ HyperG.prototype.upload = function(id, files) {
 HyperG.prototype.download = function(hash, destination) {
     var self = this, files = [];
     var archive = self.hyperdrive.createArchive(hash);
-    var network = self._create_network(archive);
+    var network = self._create_network(archive, true);
 
     network.listen(0);
     network.join(archive.discoveryKey);
@@ -160,7 +160,7 @@ HyperG.prototype._create_network = function(archive, download) {
         hash: false,
         stream: peer => {
             return archive.replicate({
-                upload: true,
+                upload: download !== true,
                 download: download !== false
             });
         },
