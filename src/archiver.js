@@ -4,6 +4,7 @@ const path = require('path');
 const pump = require('pump');
 
 const rel_re = /^(\.\.[\/\\])+/;
+const path_re = /\/|\\/;
 
 
 function Archiver() {}
@@ -34,8 +35,9 @@ Archiver.get = (archive, destination, callback) => {
         if (error) return callback(undefined, error, left);
 
         asyncEach(entries, entry => {
-            const rel = path.normalize(entry.name).replace(rel_re, '');
-            const dst = path.join(destination, rel);
+            const name = path.join.apply(path, entry.name.split(path_re));
+            const rel  = path.normalize(name).replace(rel_re, '');
+            const dst  = path.join(destination, rel);
 
             if (archive.isEntryDownloaded(entry) && fs.existsSync(dst))
                 return callback(dst, undefined, --left);
@@ -51,6 +53,8 @@ Archiver.get = (archive, destination, callback) => {
                 ws.on('error', ws_error => {
                     console.error('HyperG: get WriteStream error:', ws_error);
                 });
+
+                console.info("HyperG: get   ", name);
 
                 pump(rs, ws, error => {
                     callback(dst, error, --left);

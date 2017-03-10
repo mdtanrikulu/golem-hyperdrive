@@ -54,7 +54,7 @@ HyperG.prototype.upload = function(id, files) {
             var network = self._create_network(archive, false);
 
             network.once('listening', () => {
-                console.info("HyperG: upload  ", hash);
+                console.info("HyperG: share ", hash);
                 self.tx_networks[hash] = network;
                 cb(hash);
             });
@@ -82,7 +82,7 @@ HyperG.prototype.download = function(hash, destination) {
     network.join(archive.discoveryKey);
     self.rx_networks[uuid()] = network;
 
-    console.info("HyperG: download", hash);
+    console.info("HyperG: get   ", hash);
 
     return new Promise((cb, eb) => {
         archive.open(error => {
@@ -102,7 +102,7 @@ HyperG.prototype.cancel_upload = function(hash) {
     const exists = hash in this.tx_networks;
 
     if (exists) {
-        console.info("HyperG: cancelling", hash);
+        console.info("HyperG: cancel", hash);
         this.tx_networks[hash].leave(key);
 
         setTimeout(() => {
