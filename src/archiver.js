@@ -16,11 +16,11 @@ Archiver.add = (archive, entries, callback) => {
         var rs = fs.createReadStream(source);
         var ws = archive.createFileWriteStream({ name: name });
 
-        rs.on('error', rs_error => {
-            console.error('HyperG: add ReadStream error:', rs_error);
+        rs.on('error', err => {
+            console.error('HyperG: add ReadStream error:', err);
         });
-        ws.on('error', ws_error => {
-            console.error('HyperG: add WriteStream error:', ws_error);
+        ws.on('error', err => {
+            console.error('HyperG: add WriteStream error:', err);
         });
 
         pump(rs, ws, error => {
@@ -30,40 +30,62 @@ Archiver.add = (archive, entries, callback) => {
 }
 
 Archiver.get = (archive, destination, callback) => {
-    var download = (error, entries) => {
-        var left = entries.length;
-        if (error) return callback(undefined, error, left);
+    archive.list(null, (error, entries) => {
+        if (error) return callback(error);
+        const paths = Archiver._entry_paths(destination, entries);
+        const files = Object.keys(paths).map(k => paths[k]);
 
         asyncEach(entries, entry => {
-            const name = path.join.apply(path, entry.name.split(path_re));
-            const rel  = path.normalize(name).replace(rel_re, '');
-            const dst  = path.join(destination, rel);
+            const dst = paths[entry.name];
+            try {
+                mkdirp.sync(path.dirname(dst));
+            } catch (e) {
+                return callback(e);
+            }
 
-            if (archive.isEntryDownloaded(entry) && fs.existsSync(dst))
-                return callback(dst, undefined, --left);
+            if (Archiver._entry_downloaded(archive, entry, dst))
+                return;
 
-            mkdirp(path.dirname(dst), error => {
-                if (error) return callback(dst, error, left);
-                var rs = archive.createFileReadStream(entry);
-                var ws = fs.createWriteStream(dst);
+            var rs = archive.createFileReadStream(entry);
+            var ws = fs.createWriteStream(dst);
 
-                rs.on('error', rs_error => {
-                    console.error('HyperG: get ReadStream error:', rs_error);
-                });
-                ws.on('error', ws_error => {
-                    console.error('HyperG: get WriteStream error:', ws_error);
-                });
-
-                console.info("HyperG: get   ", name);
-
-                pump(rs, ws, error => {
-                    callback(dst, error, --left);
-                });
+            pump(rs, ws, err => {
+                if (err || Archiver._entries_downloaded(entries))
+                    process.nextTick(() => {
+                        callback(err, files);
+                    });
             });
         });
-    };
+    });
+}
 
-    archive.list({}, download);
+Archiver._entry_path = (destination, entry) => {
+    const name = path.join.apply(path, entry.name.split(path_re));
+    const rel  = path.normalize(name).replace(rel_re, '');
+    return path.join(destination, rel);
+}
+
+Archiver._entry_paths = (destination, entries) => {
+    var res = {};
+    for (var i in entries) {
+        var entry = entries[i];
+        res[entry.name] = Archiver._entry_path(destination, entry);
+    }
+    return res;
+}
+
+Archiver._entry_downloaded = (archive, entry, dst) => {
+    return archive.isEntryDownloaded(entry) && fs.existsSync(dst);
+}
+
+Archiver._entries_downloaded = (archive, entries, paths) => {
+    for (var i in entries) {
+        var entry = entries[i];
+        if (!Archiver._entry_downloaded(archive, entry,
+                                        paths[entry.name]))
+            return false;
+    }
+    return true;
 }
 
 function asyncEach(items, fn) {

@@ -109,25 +109,28 @@ RPC.prototype._commands = {
             });
     },
     upload: (self, json, response) => {
-        try {
-            json.files = Object.keys(json.files)
-                .map(key => {
-                    return [key, json.files[key]];
-                });
-        } catch (error) {
-            console.error("RPC upl error", error);
-            return self._respond({
-                    error: error.message
-                }, response, 400);
-        }
 
-        self.hyperg.upload(json.id, json.files)
+        if (!json.hash)
+            try {
+                assert.ok(json.files);
+                json.files = Object.keys(json.files)
+                    .map(key => {
+                        return [key, json.files[key]];
+                    });
+            } catch (error) {
+                console.error("RPC upload error", error);
+                return self._respond({
+                        error: error.message
+                    }, response, 400);
+            }
+
+        self.hyperg.upload(json.id, json.files, json.hash)
             .then(success => {
                 self._respond({
                     hash: success
                 }, response);
             }, error => {
-                console.error("RPC upl error", error);
+                console.error("RPC upload error", error);
                 self._respond({
                     error: error
                 }, response, 400);
@@ -138,7 +141,7 @@ RPC.prototype._commands = {
 
         if (self.hyperg.cancel_upload(json.hash))
             self._respond({
-               hash: json.hash
+                hash: json.hash
             }, response);
         else
             self._respond({
