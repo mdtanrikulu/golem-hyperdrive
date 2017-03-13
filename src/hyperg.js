@@ -76,7 +76,7 @@ HyperG.prototype.upload = function(id, files, hash) {
 }
 
 HyperG.prototype.download = function(hash, destination) {
-    var self = this, key = uuid();
+    var self = this, key = uuid(), done = false;
     var drive = self._create_hyperdrive();
     var archive = drive.createArchive(hash);
     var network = self._create_network(archive, true);
@@ -89,7 +89,10 @@ HyperG.prototype.download = function(hash, destination) {
             console.info("HyperG: get   ", hash);
 
             Archiver.get(archive, destination, (error, files) => {
+                if (done) return;
+                done = true;
                 if (error) return eb(error);
+
                 console.info("HyperG: done  ", hash);
                 cb(files);
             });
