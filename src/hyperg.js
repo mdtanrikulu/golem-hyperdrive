@@ -150,10 +150,9 @@ HyperG.prototype._create_hyperdrive = function(hash) {
     const db = this.options.db;
     var dst = this._path(hash);
 
-    if (fs.existsSync(dst)) {
+    if (fs.existsSync(dst))
         dst = this._path();
-        mkdirp.sync(dst);
-    }
+    mkdirp.sync(dst);
 
     return hyperdrive(level(dst));
 }
