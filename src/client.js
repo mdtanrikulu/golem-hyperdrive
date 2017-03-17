@@ -6,8 +6,12 @@ const path = require('path');
 
 function usage(code) {
     console.log("HyperG usage:");
-    console.log("\t1) --download [hash] [to_dir]");
+    console.log("\t1) --download [hash] [dst_dir]");
+    console.log("       Download an archive with [hash] to [dst_dir]")
     console.log("\t2) --upload [file_1] [file_2] ...");
+    console.log("       Create and share an archive with given files")
+    console.log("\t3) --cancel [hash]");
+    console.log("       Stop sharing an archive identified by [hash]")
     console.log("\nadditional options:");
     console.log("\t --host  daemon IP address");
     console.log("\t --port  daemon port");
@@ -76,5 +80,12 @@ else if (options.upload) {
         command: 'upload',
         files: files
     }, options);
-} else
+
+} else if (options.cancel)
+    request({
+        command: 'cancel',
+        hash: options.cancel
+    }, options);
+
+else
     usage(1);

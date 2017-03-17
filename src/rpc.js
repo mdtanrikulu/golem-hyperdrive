@@ -102,7 +102,7 @@ RPC.prototype._commands = {
                     files: success
                 }, response);
             }, error => {
-                console.error("RPC dl error", error);
+                console.error("RPC error (download)", error);
                 self._respond({
                     error: error
                 }, response, 400);
@@ -118,7 +118,7 @@ RPC.prototype._commands = {
                         return [key, json.files[key]];
                     });
             } catch (error) {
-                console.error("RPC upload error", error);
+                console.error("RPC error (upload)", error);
                 return self._respond({
                         error: error.message
                     }, response, 400);
@@ -130,7 +130,7 @@ RPC.prototype._commands = {
                     hash: success
                 }, response);
             }, error => {
-                console.error("RPC upload error", error);
+                console.error("RPC error (upload)", error);
                 self._respond({
                     error: error
                 }, response, 400);
@@ -139,14 +139,17 @@ RPC.prototype._commands = {
     cancel: (self, json, response) => {
         assert.ok(json.hash);
 
-        if (self.hyperg.cancel_upload(json.hash))
-            self._respond({
-                hash: json.hash
-            }, response);
-        else
-            self._respond({
-                not_found: json.hash
-            }, response, 404);
+        self.hyperg.cancel_upload(json.hash)
+            .then(success => {
+                self._respond({
+                    hash: success
+                }, response);
+            }, error => {
+                console.error("RPC error (cancel)", error);
+                self._respond({
+                    error: error
+                }, response, 404);
+            });
     }
 }
 
