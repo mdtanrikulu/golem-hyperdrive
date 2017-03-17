@@ -19,6 +19,9 @@ RPC.prototype.listen = function() {
         self._route(self, request, response);
     });
 
+    // FIXME: keepalive
+    self.server.setTimeout(10 * 120 * 1000);
+
     self.server.on('error', error => {
         console.error('Hyperdrive: Error listening on',
                       self.host + ':' + self.port,
