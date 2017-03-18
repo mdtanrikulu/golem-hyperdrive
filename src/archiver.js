@@ -50,7 +50,8 @@ Archiver.get = (archive, destination, callback) => {
             var ws = fs.createWriteStream(dst);
 
             pump(rs, ws, err => {
-                if (err || Archiver._entries_downloaded(entries))
+                if (err || Archiver._entries_downloaded(archive, entries,
+                                                        paths))
                     process.nextTick(() => {
                         callback(err, files);
                     });
@@ -67,10 +68,8 @@ Archiver._entry_path = (destination, entry) => {
 
 Archiver._entry_paths = (destination, entries) => {
     var res = {};
-    for (var i in entries) {
-        var entry = entries[i];
+    for (var entry of entries)
         res[entry.name] = Archiver._entry_path(destination, entry);
-    }
     return res;
 }
 
@@ -79,8 +78,7 @@ Archiver._entry_downloaded = (archive, entry, dst) => {
 }
 
 Archiver._entries_downloaded = (archive, entries, paths) => {
-    for (var i in entries) {
-        var entry = entries[i];
+    for (var entry of entries) {
         if (!Archiver._entry_downloaded(archive, entry,
                                         paths[entry.name]))
             return false;
@@ -88,7 +86,8 @@ Archiver._entries_downloaded = (archive, entries, paths) => {
     return true;
 }
 
-function asyncEach(items, fn) {
+function asyncEach(source, fn) {
+    var items = source.slice();
     var loop = () => {
         if (items.length > 0)
             setTimeout(() => {
