@@ -12,7 +12,7 @@
     "hyperg-client": "src/client.js"
   },
   "scripts": {
-    "dist:deps:sodium": "cp node_modules/sodium-prebuilt/build/Release/sodium.node dist/hyperg",
+    "dist:deps:sodium": "PLATFORM=$(uname | tr '[A-Z]' '[a-z]') && cp node_modules/sodium-native/prebuilds/${PLATFORM}-x64/node-51.node dist/hyperg/sodium.node",
     "dist:deps:rabin": "cp node_modules/rabin/build/Release/rabin.node dist/hyperg",
     "dist:deps:leveldown": "cp node_modules/leveldown/build/Release/leveldown.node dist/hyperg",
     "dist:deps": "mkdir -p dist/hyperg && npm run dist:deps:sodium && npm run dist:deps:rabin && npm run dist:deps:leveldown",
@@ -33,7 +33,6 @@
     "minimist": "1.2.0",
     "mkdirp": "^0.5.1",
     "pump": "^1.0.2",
-    "sodium-prebuilt": "^1.0.22",
     "uuid": "^3.0.1"
   }
 }
