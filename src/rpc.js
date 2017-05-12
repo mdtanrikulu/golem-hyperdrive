@@ -1,6 +1,7 @@
 const http = require('http');
 const assert = require('assert');
 
+const logger = require('./logger');
 
 const DEFAULT_HOST = 'localhost';
 const DEFAULT_PORT = 3292;
@@ -23,9 +24,9 @@ RPC.prototype.listen = function() {
     self.server.setTimeout(10 * 120 * 1000);
 
     self.server.on('error', error => {
-        console.error('Hyperdrive: Error listening on',
-                      self.host + ':' + self.port,
-                      ':', error.code);
+        logger.error('Error listening on',
+                     self.host + ':' + self.port,
+                     ':', error.code);
         process.exit(1);
     });
 
@@ -43,7 +44,7 @@ RPC.prototype._route = function(ctx, request, response) {
     var body = [], json;
 
     try {
-        self._validate_request(request);
+        self._validateRequest(request);
     } catch (error) {
         return self._respond({
             error: error
@@ -81,7 +82,7 @@ RPC.prototype._route = function(ctx, request, response) {
         try {
             self._commands[json.command](self, json, response);
         } catch(exc) {
-            console.error('err', exc);
+            logger.error(exc);
             return self._respond({
                 error: exc.message
             }, response, 400);
@@ -92,7 +93,7 @@ RPC.prototype._route = function(ctx, request, response) {
 RPC.prototype._commands = {
     id: (self, json, response) => {
         self._respond({
-            id: self.hyperg.id
+            id: self.hyperg.archiver.id()
         }, response);
     },
     download: (self, json, response) => {
@@ -100,14 +101,14 @@ RPC.prototype._commands = {
         assert.ok(json.dest);
 
         self.hyperg.download(json.hash, json.dest)
-            .then(success => {
+            .then(files => {
                 self._respond({
-                    files: success
+                    files: files
                 }, response);
             }, error => {
-                console.error("RPC error (download)", error);
+                logger.error("RPC error [download]", error);
                 self._respond({
-                    error: error
+                    error: error.message
                 }, response, 400);
             });
     },
@@ -121,46 +122,52 @@ RPC.prototype._commands = {
                         return [key, json.files[key]];
                     });
             } catch (error) {
-                console.error("RPC error (upload)", error);
+                logger.error("RPC error [upload]", error);
                 return self._respond({
-                        error: error.message
-                    }, response, 400);
+                    error: error.message
+                }, response, 400);
             }
 
         self.hyperg.upload(json.id, json.files, json.hash)
-            .then(success => {
+            .then(hash => {
                 self._respond({
-                    hash: success
+                    hash: hash
                 }, response);
             }, error => {
-                console.error("RPC error (upload)", error);
+                logger.error("RPC error [upload]", error);
                 self._respond({
-                    error: error
+                    error: error.message
                 }, response, 400);
             });
     },
     cancel: (self, json, response) => {
         assert.ok(json.hash);
 
-        self.hyperg.cancel_upload(json.hash)
-            .then(success => {
+        self.hyperg.cancel(json.hash)
+            .then(hash => {
                 self._respond({
-                    hash: success
+                    hash: hash
                 }, response);
             }, error => {
-                console.error("RPC error (cancel)", error);
+                logger.error("RPC error [cancel]", error);
                 self._respond({
-                    error: error
+                    error: error.message
                 }, response, 404);
             });
+    },
+    addresses: (self, json, response) => {
+        var addresses = self.hyperg.addresses(self.hyperg.swarm);
+        self._respond({
+            addresses: addresses
+        }, response);
     }
 }
 
-RPC.prototype._validate_request = function(request) {
+RPC.prototype._validateRequest = function(request) {
     if (request.method.toLowerCase() != 'post')
-        throw 'Invalid request method';
+        throw new Error('Invalid request method');
     if (request.headers['content-type'] != 'application/json')
-        throw 'Invalid content type';
+        throw new Error('Invalid content type');
 }
 
 RPC.prototype._respond = function(data, response, code) {

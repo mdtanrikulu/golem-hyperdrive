@@ -1,6 +1,6 @@
 {
   "name": "golem-hyperdrive",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Hyperdrive client for the Golem project",
   "author": "Marek Franciszkiewicz",
   "keywords": [
@@ -8,7 +8,7 @@
     "replication"
   ],
   "bin": {
-    "hyperg": "src/main.js",
+    "hyperg": "src/index.js",
     "hyperg-client": "src/client.js"
   },
   "scripts": {
@@ -16,23 +16,22 @@
     "dist:deps:rabin": "cp node_modules/rabin/build/Release/rabin.node dist/hyperg",
     "dist:deps:leveldown": "cp node_modules/leveldown/build/Release/leveldown.node dist/hyperg",
     "dist:deps": "mkdir -p dist/hyperg && npm run dist:deps:sodium && npm run dist:deps:rabin && npm run dist:deps:leveldown",
-    "dist:main": "enclose -c enclose.conf -o dist/hyperg/hyperg src/main.js",
-    "dist:main:upx": "upx dist/hyperg/hyperg || echo 'UPX is not available'",
+    "dist:main": "enclose -c enclose.conf -o dist/hyperg/hyperg src/index.js",
     "dist:client": "enclose -c enclose.conf -o dist/hyperg/hyperg-client src/client.js",
-    "dist:client:upx": "upx dist/hyperg/hyperg-client || echo 'UPX is not available'",
-    "dist": "npm run dist:deps && npm run dist:main && npm run dist:main:upx && npm run dist:client && npm run dist:client:upx",
+    "dist": "npm run dist:deps && npm run dist:main && npm run dist:client",
     "clean": "rm -rf dist/*"
   },
   "dependencies": {
-    "datland-swarm-defaults": "^1.0.0",
-    "discovery-swarm": "^4.0.2",
-    "hyperdiscovery": "^1.0.1",
-    "hyperdrive": "^7.9.0",
-    "hyperdrive-import-files": "^2.8.0",
-    "level": "^1.5.0",
+    "datland-swarm-defaults": "1.0.0",
+    "discovery-swarm": "4.0.2",
+    "hypercore": "4.10.0",
+    "hyperdrive": "7.9.0",
+    "level": "1.5.0",
     "minimist": "1.2.0",
-    "mkdirp": "^0.5.1",
-    "pump": "^1.0.2",
-    "uuid": "^3.0.1"
+    "mkdirp": "0.5.1",
+    "passthrough-encoding": "1.2.0",
+    "pump": "1.0.2",
+    "uuid": "^3.0.1",
+    "winston": "^2.3.1"
   }
 }

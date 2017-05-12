@@ -1,205 +1,235 @@
 const fs = require('fs');
 const mkdirp = require('mkdirp');
-const level = require('level');
 const path = require('path');
 const uuid = require('uuid/v4');
+const hash = require('hypercore/lib/hash');
 
-const hyperdrive = require('hyperdrive');
-const importer = require('hyperdrive-import-files');
-const discovery = require('discovery-swarm');
-const defaults = require('datland-swarm-defaults');
+const Swarm = require('discovery-swarm');
+const SwarmDefaults = require('datland-swarm-defaults');
 
 const Archiver = require('./archiver');
 const RPC = require('./rpc');
 
-process.setMaxListeners(0);
+const common = require('./common');
+const logger = require('./logger');
 
-process.on('SIGPIPE', () => {
-    console.error("HyperG warning: broken pipe");
-});
+/* Unlimited event listeners */
+process.setMaxListeners(0);
+/* Log SIGPIPE errors */
+process.on('SIGPIPE', () => logger.error("broken pipe"));
+
 
 function HyperG(options) {
-    if (!(this instanceof HyperG))
-        return new HyperG(options);
+    var self = this;
 
-    this.options = options;
-    this.options.db = options.db || './hyperg.db';
-    this.id = uuid();
+    self.options = Object.assign({
+        host: '0.0.0.0',
+        port: 3282,
+        rpc_host: 'localhost',
+        rpc_port: 3292,
+        db: './' + common.application + '.db'
+    }, options);
 
-    this._networks = [];
-    this._running = false;
+    self.rpc = new RPC(self, self.options.rpc_port, self.options.rpc_host);
+    self.archiver = new Archiver(self.options);
+
+    /* TODO: use custom DHT nodes */
+    self.swarmConstants = {
+        closeTimeout: 5000
+    }
+    self.swarmOptions = {
+        utp: true,
+        tcp: true,
+        dht: true,
+        dns: true,
+        hash: false
+    }
+    self.swarm = new Swarm(new SwarmDefaults(
+        Object.assign({}, self.swarmOptions, {
+            /* keeps 'this' context in replicate */
+            stream: peer => self.archiver.replicate(peer)
+        })   
+    ));
+
+    self.running = false;
+}
+
+HyperG.exit = function(message, code) {
+    if (message) {
+        code = code || 1;
+        logger.error(message);
+    }
+    
+    process.exit(code);
 }
 
 HyperG.prototype.run = function() {
-    if (this._running) return;
-    this._running = true;
-
-    this.expose_rpc()
-        .then(() => {
-            console.info("HyperG is ready");
-        }, this.exit);
-}
-
-HyperG.prototype.upload = function(id, files, hash) {
     var self = this;
-    var drive = self._create_hyperdrive();
-    var archive = drive.createArchive(hash);
 
-    return new Promise((cb, eb) => {
+    if (self.running) return;
+    self.running = true;
 
-        const on_finalize = error => {
-            if (error) return eb(error);
+    self.swarm.once('error', HyperG.exit);
+    self.swarm.once('listening', () =>
+        self.rpc.listen(self.options.rpc_port, self.options.rpc_host)
+            .then(() => {
+                logger.info(common.application, '[' + common.version + ']');
 
-            var hash = archive.key.toString('hex');
-            var network = self._create_network(archive, false);
+                var addresses = self.addresses(self.swarm);
+                if ('TCP' in addresses)
+                    logger.info('TCP listening on',
+                                addresses.TCP.address + ':' + addresses.TCP.port);
+                if ('UTP' in addresses)
+                    logger.info('UTP listening on',
+                                addresses.UTP.address + ':' + addresses.UTP.port);
 
-            network.once('listening', () => {
-                console.info("HyperG: share ", hash);
-                network.join(archive.discoveryKey);
-                cb(hash);
-            });
+            }, self.exit)
+    );
 
-            network.on('error', eb);
-            network.listen(0);
-        };
-
-        if (hash)
-            importer(archive, dst, null, on_finalize);
-        else
-            Archiver.add(archive, files, (file, error, left) => {
-                if (error) return eb(error);
-                if (left <= 0) archive.finalize(on_finalize);
-            });
+    self.swarm.listen({
+        host: self.options.host,
+        port: self.options.port,
+        id: self.archiver.id()
     });
 }
 
-HyperG.prototype.download = function(hash, destination) {
-    var self = this, key = uuid(), done = false;
-    var drive = self._create_hyperdrive();
-    var archive = drive.createArchive(hash);
-    var network = self._create_network(archive, true);
+HyperG.prototype.upload = function(id, files, discoveryKey) {
+    if (discoveryKey)
+        return this.uploadArchive(discoveryKey);
+    return this.uploadFiles(files);
+}
+
+HyperG.prototype.uploadFiles = function(files) {
+    var self = this;
 
     return new Promise((cb, eb) => {
-
-        const on_open = error => {
+        self.archiver.create(files, (error, archive) => {
             if (error) return eb(error);
 
-            console.info("HyperG: get   ", hash);
+            archive.finalize(error => {
+                if (error) return eb(error);
+                var key = archive.key.toString('hex');
 
-            Archiver.get(archive, destination, (err, files) => {
-                if (done) return;
-                done = true;
-                if (err) return eb(err);
+                logger.info('Sharing', key);                
+                self.swarm.join(archive.discoveryKey);
+                cb(key);
+            });
 
-                console.info("HyperG: done  ", hash);
+        });
+    });
+}
+
+HyperG.prototype.uploadArchive = function(key) {
+    var self = this;
+    var discoveryKey = hash.discoveryKey(key).toString('hex');
+
+    return new Promise((cb, eb) => {
+        self.archiver.stat(discoveryKey, error => {
+            if (error) return eb(error);
+
+            logger.info("Sharing (cached)", key);
+            self.swarm.join(discoveryKey);
+            cb(key);
+        })
+    });
+}
+
+HyperG.prototype.download = function(key, destination) {
+    var self = this;
+    var archive = self.archiver.createArchive(key);
+    var downloadSwarm = new Swarm(new SwarmDefaults(
+        Object.assign({}, self.swarmOptions, {
+            stream: peer => archive.replicate({
+                upload: false,
+                download: true
+            })
+        })
+    ));
+
+    return new Promise((cb, eb) => {
+        const on_open = error => {
+            if (error) return eb(error);
+            self.archiver.copyArchive(archive, destination, (error, files) => {
+                self.closeSwarm(downloadSwarm, archive);
+                
+                if (error) return eb(error);
+                
+                logger.info('Downloaded', key);
                 cb(files);
             });
         }
 
-        network.once('listening', () => {
-            network.join(archive.discoveryKey);
+        downloadSwarm.once('error', eb);
+        downloadSwarm.once('close', () => logger.debug('Closing swarm', key));
+        downloadSwarm.once('listening', () => {
+            logger.info("Looking up", key);
+
+            var addresses = self.addresses(downloadSwarm);
+            if ('TCP' in addresses)
+                logger.debug('TCP swarm', key, 
+                             addresses.TCP.address + ':' + addresses.TCP.port);
+            if ('UTP' in addresses)
+                logger.debug('UTP swarm', key, 
+                             addresses.UTP.address + ':' + addresses.UTP.port);
+
+            downloadSwarm.join(archive.discoveryKey);
             archive.open(on_open);
         });
 
-        network.on('error', eb);
-        network.listen(0);
+        downloadSwarm.listen(0);
     });
 }
 
-HyperG.prototype.cancel_upload = function(hash) {
-    var self = this;
+HyperG.prototype.closeSwarm = function(swarm, archive) {
+    if (archive)
+        try {
+            swarm.leave(archive.discoveryKey);
+        } catch (exc) {
+            logger.error('Error leaving swarm:', exc);
+        }
 
-    return new Promise((cb, eb) => {
-        if (hash in self._networks)
-            self._close_network(self._networks[hash], err => {
-                if (err) return eb(err);
-
-                if (hash in self._networks)
-                    delete self._networks[hash];
-                cb(hash);
-            });
-        else
-            eb(hash);
-    });
+    setTimeout(() => {
+        try {
+            swarm.close();
+        } catch (exc) {
+            logger.error('Error closing swarm:', exc);
+        }
+    }, this.swarmConstants.closeTimeout);
 }
 
-HyperG.prototype.expose_rpc = function(port, host) {
-    host = host || 'localhost';
-    this.rpc = new RPC(this, port, host);
-    return this.rpc.listen();
-}
-
-HyperG.prototype.exit = function(message, code) {
-    if (message)
-        console.error(message);
-
-    const _try = fn => {
-        try { fn(); }
-        catch (e) { console.error('HyperG error:', e); }
+HyperG.prototype.addresses = function(swarm) {
+    const serverAddress = server => {
+        var address = server.address();
+        return {
+            address: address.address,
+            port: address.port
+        };
     }
 
-    for (var key in self._networks)
-        if (self._networks.hasOwnProperty(key))
-            _try(self._networks[key].close);
-
-    process.exit(code);
+    var result = {};
+    if (swarm._tcp)
+        result.TCP = serverAddress(swarm._tcp);    
+    if (swarm._utp)
+        result.UTP = serverAddress(swarm._utp);
+    return result;
 }
 
-HyperG.prototype._create_hyperdrive = function(hash) {
-    const db = this.options.db;
-    var dst = this._path(hash);
+HyperG.prototype.cancel = function(key) {
+    var self = this;
+    var discoveryKeyBuffer = hash.discoveryKey(key);
 
-    if (fs.existsSync(dst))
-        dst = this._path();
-    mkdirp.sync(dst);
-
-    return hyperdrive(level(dst));
-}
-
-HyperG.prototype._create_network = function(archive, download) {
-    var hash = archive.key.toString('hex');
-    var upload = !(hash in this._networks);
-    var options = Object.assign({
-        id: archive.id,
-        hash: false,
-        stream: peer => {
-            return archive.replicate({
-                upload: upload,
-                download: !!download
-            });
-        },
-    }, this.options);
-
-    var network = discovery(defaults(options));
-    network.archive = archive;
-    network.db = archive.drive.core._db;
-
-    if (upload)
-        this._networks[hash] = network;
-    this._log_errors(network);
-
-    return network;
-}
-
-HyperG.prototype._close_network = function(network, cb) {
-    network.archive.unreplicate();
-    network.leave(network.archive.discoveryKey);
-    network.once('close', () => {
-        network.archive.close(() => {
-            network.db.close(cb);
+    return new Promise((cb, eb) => {
+        var discoveryKey = discoveryKeyBuffer.toString('hex');
+        // TODO: close active connections
+        self.swarm.leave(discoveryKeyBuffer);
+        // TODO: remove actual data
+        self.archiver.remove(discoveryKey, error => {
+            if (error) return eb(error);
+            logger.info("Canceling", key);
+            cb(key);
         });
     });
-    network.destroy();
 }
 
-HyperG.prototype._path = function(hash) {
-    return path.join(this.options.db, hash || uuid());
-}
-
-HyperG.prototype._log_errors = function(emitter) {
-    emitter.on('error', error => {
-        console.error('HyperG error:', error);
-    });
-}
 
 module.exports = HyperG;
