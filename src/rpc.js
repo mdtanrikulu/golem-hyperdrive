@@ -7,18 +7,18 @@ const DEFAULT_HOST = 'localhost';
 const DEFAULT_PORT = 3292;
 
 
-function RPC(hyperg, port, host) {
+function RPC(app, port, host) {
     this.port = port || DEFAULT_PORT;
     this.host = host || DEFAULT_HOST;
-    this.hyperg = hyperg;
+    this.app = app;
 }
 
 RPC.prototype.listen = function() {
     var self = this;
 
-    self.server = http.createServer((request, response) => {
-        self._route(self, request, response);
-    });
+    self.server = http.createServer((request, response) =>
+        self._route(self, request, response)
+    );
 
     // FIXME: keepalive
     self.server.setTimeout(10 * 120 * 1000);
@@ -93,14 +93,14 @@ RPC.prototype._route = function(ctx, request, response) {
 RPC.prototype._commands = {
     id: (self, json, response) => {
         self._respond({
-            id: self.hyperg.archiver.id()
+            id: self.app.id()
         }, response);
     },
     download: (self, json, response) => {
         assert.ok(json.hash);
         assert.ok(json.dest);
 
-        self.hyperg.download(json.hash, json.dest)
+        self.app.download(json.hash, json.dest)
             .then(files => {
                 self._respond({
                     files: files
@@ -128,7 +128,7 @@ RPC.prototype._commands = {
                 }, response, 400);
             }
 
-        self.hyperg.upload(json.id, json.files, json.hash)
+        self.app.upload(json.id, json.files, json.hash)
             .then(hash => {
                 self._respond({
                     hash: hash
@@ -143,7 +143,7 @@ RPC.prototype._commands = {
     cancel: (self, json, response) => {
         assert.ok(json.hash);
 
-        self.hyperg.cancel(json.hash)
+        self.app.cancel(json.hash)
             .then(hash => {
                 self._respond({
                     hash: hash
@@ -156,7 +156,7 @@ RPC.prototype._commands = {
             });
     },
     addresses: (self, json, response) => {
-        var addresses = self.hyperg.addresses(self.hyperg.swarm);
+        var addresses = self.app.addresses(self.app.swarm);
         self._respond({
             addresses: addresses
         }, response);
