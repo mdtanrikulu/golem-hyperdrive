@@ -10,10 +10,15 @@ var options = minimist(process.argv.slice(2));
 
 if (options.v || options.version)
     return console.log(common.version);
-if (options.p || options.port)
-    options.port = parseInt(options.port);
-if (options.i || options.id)
-    assert.ok(options.id.length == 32)
+
+if (options.h) {
+    options.host = options.h;
+    delete options.h;
+}
+if (options.p) {
+    options.port = options.p;
+    delete options.p;
+}
 
 var server = new Server(options);
 server.run();
