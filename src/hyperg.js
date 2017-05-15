@@ -48,7 +48,7 @@ function HyperG(options) {
         Object.assign({}, self.swarmOptions, {
             /* keeps 'this' context in replicate */
             stream: peer => self.archiver.replicate(peer)
-        })   
+        })
     ));
 
     self.running = false;
@@ -59,8 +59,12 @@ HyperG.exit = function(message, code) {
         code = code || 1;
         logger.error(message);
     }
-    
+
     process.exit(code);
+}
+
+HyperG.prototype.id = function() {
+    return this.archiver.id();
 }
 
 HyperG.prototype.run = function() {
@@ -89,7 +93,7 @@ HyperG.prototype.run = function() {
     self.swarm.listen({
         host: self.options.host,
         port: self.options.port,
-        id: self.archiver.id()
+        id: self.id()
     });
 }
 
@@ -110,7 +114,7 @@ HyperG.prototype.uploadFiles = function(files) {
                 if (error) return eb(error);
                 var key = archive.key.toString('hex');
 
-                logger.info('Sharing', key);                
+                logger.info('Sharing', key);
                 self.swarm.join(archive.discoveryKey);
                 cb(key);
             });
@@ -151,9 +155,9 @@ HyperG.prototype.download = function(key, destination) {
             if (error) return eb(error);
             self.archiver.copyArchive(archive, destination, (error, files) => {
                 self.closeSwarm(downloadSwarm, archive);
-                
+
                 if (error) return eb(error);
-                
+
                 logger.info('Downloaded', key);
                 cb(files);
             });
@@ -166,10 +170,10 @@ HyperG.prototype.download = function(key, destination) {
 
             var addresses = self.addresses(downloadSwarm);
             if ('TCP' in addresses)
-                logger.debug('TCP swarm', key, 
+                logger.debug('TCP swarm', key,
                              addresses.TCP.address + ':' + addresses.TCP.port);
             if ('UTP' in addresses)
-                logger.debug('UTP swarm', key, 
+                logger.debug('UTP swarm', key,
                              addresses.UTP.address + ':' + addresses.UTP.port);
 
             downloadSwarm.join(archive.discoveryKey);
@@ -208,7 +212,7 @@ HyperG.prototype.addresses = function(swarm) {
 
     var result = {};
     if (swarm._tcp)
-        result.TCP = serverAddress(swarm._tcp);    
+        result.TCP = serverAddress(swarm._tcp);
     if (swarm._utp)
         result.UTP = serverAddress(swarm._utp);
     return result;
