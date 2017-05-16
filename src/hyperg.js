@@ -35,7 +35,7 @@ function HyperG(options) {
 
     /* TODO: use custom DHT nodes */
     self.swarmConstants = {
-        closeTimeout: 10000
+        closeTimeout: 1500
     }
     self.swarmOptions = {
         utp: true,
@@ -157,17 +157,13 @@ HyperG.prototype.download = function(key, destination) {
         const on_open = error => {
             if (error) return eb(error);
             self.archiver.copyArchive(archive, destination, (error, files) => {
-                self.closeSwarm(downloadSwarm, archive);
-
                 if (error) return eb(error);
-
-                logger.info('Downloaded', key);
-                cb(files);
+                logger.info('Downloaded', key); cb(files);
+                self.closeSwarm(downloadSwarm, archive);
             });
         }
 
         downloadSwarm.once('error', eb);
-        downloadSwarm.once('close', () => logger.debug('Closing swarm', key));
         downloadSwarm.once('listening', () => {
             logger.info("Looking up", key);
 
@@ -188,20 +184,52 @@ HyperG.prototype.download = function(key, destination) {
 }
 
 HyperG.prototype.closeSwarm = function(swarm, archive) {
+    var self = this;
+
+    const destroy = () =>
+        setTimeout(() => {
+            logger.debug('Closing swarm', archive.key.toString('hex'));
+            self._destroySwarm(swarm);
+        }, this.swarmConstants.closeTimeout);
+
     if (archive)
-        try {
+        archive.close(() => {
             swarm.leave(archive.discoveryKey);
-        } catch (exc) {
-            logger.error('Error leaving swarm:', exc);
+            destroy();
+        });
+    else
+        destroy();
+}
+
+HyperG.prototype._destroySwarm = function(swarm) {
+    try {
+        if (swarm.destroyed) return;
+        swarm.destroyed = true;
+
+        swarm._peersQueued = [];
+        swarm._requeue = nop;
+        swarm._kick = nop;
+        swarm.emit = nop;
+
+        if (swarm._discovery)
+            swarm._discovery.destroy();
+
+        if (swarm._tcp) {
+            swarm._tcpConnections.destroy();
+            swarm._tcp.unref();
+            // windows: heap corruption imminent
+            // swarm._tcp.close();
         }
 
-    setTimeout(() => {
-        try {
-            swarm.close();
-        } catch (exc) {
-            logger.error('Error closing swarm:', exc);
+        if (swarm._utp) {
+            for (var conn of swarm._utp.connections)
+                conn.destroy();
+            swarm._utp.close();
         }
-    }, this.swarmConstants.closeTimeout);
+
+    } catch (exc) {
+        logger.error('Error closing swarm:', exc);
+    }
 }
 
 HyperG.prototype.addresses = function(swarm) {
@@ -238,5 +266,7 @@ HyperG.prototype.cancel = function(key) {
     });
 }
 
+
+const nop = () => {};
 
 module.exports = HyperG;
