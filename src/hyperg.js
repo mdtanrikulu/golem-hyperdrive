@@ -216,9 +216,10 @@ HyperG.prototype._destroySwarm = function(swarm) {
 
         if (swarm._tcp) {
             swarm._tcpConnections.destroy();
-            swarm._tcp.unref();
-            // windows: heap corruption imminent
-            // swarm._tcp.close();
+            // FIXME: close (+ optional unref) may cause
+            // a segfault / heap corruption
+
+            // swarm._tcp.close(swarm._tcp.unref);
         }
 
         if (swarm._utp) {
