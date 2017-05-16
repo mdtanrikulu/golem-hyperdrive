@@ -1,8 +1,16 @@
 {
   "name": "golem-hyperdrive",
+  "alias": "HyperG",
   "version": "0.2.0",
   "description": "Hyperdrive client for the Golem project",
-  "author": "Marek Franciszkiewicz",
+  "author": {
+    "name": "Marek Franciszkiewicz",
+    "email": "marek@golem.network"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mfranciszkiewicz/golem-hyperdrive"
+  },
   "keywords": [
     "p2p",
     "replication"
@@ -11,15 +19,16 @@
     "hyperg": "src/index.js",
     "hyperg-client": "src/client.js"
   },
+  "pkg": {
+    "assets": "./node_modules/hyperdrive-encoding/schema.proto"
+  },
   "scripts": {
-    "dist:deps:sodium": "PLATFORM=$(uname | tr '[A-Z]' '[a-z]') && cp node_modules/sodium-native/prebuilds/${PLATFORM}-x64/node-51.node dist/hyperg/sodium.node",
-    "dist:deps:rabin": "cp node_modules/rabin/build/Release/rabin.node dist/hyperg",
-    "dist:deps:leveldown": "cp node_modules/leveldown/build/Release/leveldown.node dist/hyperg",
-    "dist:deps": "mkdir -p dist/hyperg && npm run dist:deps:sodium && npm run dist:deps:rabin && npm run dist:deps:leveldown",
-    "dist:main": "enclose -c enclose.conf -o dist/hyperg/hyperg src/index.js",
-    "dist:client": "enclose -c enclose.conf -o dist/hyperg/hyperg-client src/client.js",
-    "dist": "npm run dist:deps && npm run dist:main && npm run dist:client",
-    "clean": "rm -rf dist/*"
+    "start": "node src/index.js",
+    "archive": "node build.js archive",
+    "build": "node build.js build",
+    "clean": "node build.js clean",
+    "deps": "node build.js deps",
+    "dist": "npm run clean && npm run deps && npm run build && npm run archive"
   },
   "dependencies": {
     "datland-swarm-defaults": "1.0.0",
@@ -27,11 +36,20 @@
     "hypercore": "4.10.0",
     "hyperdrive": "7.9.0",
     "level": "1.5.0",
+    "leveldown": "~1.5.0",
     "minimist": "1.2.0",
     "mkdirp": "0.5.1",
     "passthrough-encoding": "1.2.0",
     "pump": "1.0.2",
+    "rabin": "^1.4.0",
+    "rimraf": "2.6.1",
+    "utp-native": "^1.2.2",
     "uuid": "^3.0.1",
     "winston": "^2.3.1"
+  },
+  "devDependencies": {
+    "pkg": "3.0.4",
+    "archiver": "1.3.0",
+    "node-abi": "2.0.2"
   }
 }

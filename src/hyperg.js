@@ -35,7 +35,7 @@ function HyperG(options) {
 
     /* TODO: use custom DHT nodes */
     self.swarmConstants = {
-        closeTimeout: 5000
+        closeTimeout: 10000
     }
     self.swarmOptions = {
         utp: true,
@@ -73,7 +73,10 @@ HyperG.prototype.run = function() {
     if (self.running) return;
     self.running = true;
 
-    self.swarm.once('error', HyperG.exit);
+    self.swarm.once('error', error => {
+        console.error('Swarm error:', error);
+        HyperG.exit();
+    });
     self.swarm.once('listening', () =>
         self.rpc.listen(self.options.rpc_port, self.options.rpc_host)
             .then(() => {
@@ -87,7 +90,7 @@ HyperG.prototype.run = function() {
                     logger.info('UTP listening on',
                                 addresses.UTP.address + ':' + addresses.UTP.port);
 
-            }, self.exit)
+            }, HyperG.exit)
     );
 
     self.swarm.listen({

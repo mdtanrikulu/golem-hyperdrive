@@ -1,6 +1,6 @@
-const version = require('../package.json').version;
+const package = require('../package.json');
 
 module.exports = {
-    application: 'HyperG',
-    version: version
+    application: package.alias,
+    version: package.version
 }
