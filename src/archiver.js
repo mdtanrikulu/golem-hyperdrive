@@ -18,7 +18,9 @@ const ERR_NONE = null,
 const rel_re = /^(\.\.[\/\\])+/;
 const path_re = /\/|\\/;
 
+
 function Entries() {}
+
 
 function Archiver(options, streamOptions) {
     const dir = path.dirname(options.db);
@@ -33,6 +35,7 @@ function Archiver(options, streamOptions) {
         maxListeners: 0
     }, streamOptions || {});
 }
+
 
 Archiver.prototype.id = function() {
     return this.drive.core.id;
@@ -94,8 +97,7 @@ Archiver.prototype.replicate = function(peer) {
             var feed = self.createFeed(feedInfo);
             logger.debug("Uploading", feed.key
                          ? feed.key.toString('hex')
-                         : 'discoveryKey ' + discoveryKey,
-                         peer);
+                         : 'discoveryKey ' + discoveryKey);
             feed.replicate({ stream: stream });
         })
     });
@@ -123,7 +125,7 @@ Archiver.prototype.createFeed = function(feedInfo) {
 }
 
 Archiver.prototype.copyArchive = function(archive, destination, cb) {
-    Entries.copy(archive, destination, cb);
+    Entries.save(archive, destination, cb);
 }
 
 
@@ -177,16 +179,24 @@ Entries.listArchive = function(archive, destination, cb) {
     });
 }
 
-Entries.copy = function(archive, destination, cb) {
+Entries.save = function(archive, destination, cb) {
     archive.list(null, (error, entries) => {
         if (error) return cb(error);
 
         const paths = Entries.map(entries, destination);
+        const files = Object.keys(paths).map(k => paths[k]);
 
         asyncEach(entries, (entry, next, left) => {
             if (!Entries.is_file(entry)) return next();
 
             const dest = paths[entry.name];
+
+            if (Entries.exists(archive, entry, dest)) {
+                if (left) return next();
+                return cb(ERR_NONE, files);
+            }
+
+            logger.debug('Save', entry.name, '=>\n', dest);
 
             try {
                 mkdirp.sync(path.dirname(dest));
@@ -197,16 +207,15 @@ Entries.copy = function(archive, destination, cb) {
             var rs = archive.createFileReadStream(entry);
             var ws = fs.createWriteStream(dest);
 
-            rs.on('error', err => logger.error('ReadStream error [copy]:', err));
-            ws.on('error', err => logger.error('WriteStream error [copy]:', err));
+            rs.on('error', err =>
+                logger.error('ReadStream error [save]:', err));
+            ws.on('error', err =>
+                logger.error('WriteStream error [save]:', err));
 
             pump(rs, ws, error => {
-                if (error)
-                    cb(error);
-                else if (!left)
-                    cb(ERR_NONE, Object.keys(paths).map(k => paths[k]));
-                else
-                    next();
+                if (error)      cb(error);
+                else if (!left) cb(ERR_NONE, files);
+                else            next();
             });
         });
     });
@@ -220,26 +229,34 @@ Entries.archive = function(archive, files, cb) {
         var rs = fs.createReadStream(source);
         var ws = archive.createFileWriteStream({ name: name });
 
-        rs.on('error', err => logger.error('ReadStream error [archive]:', err));
-        ws.on('error', err => logger.error('WriteStream error [archive]:', err));
+        rs.on('error', err =>
+            logger.error('ReadStream error [archive]:', err));
+        ws.on('error', err =>
+            logger.error('WriteStream error [archive]:', err));
 
         pump(rs, ws, error => {
-            if (error)
-                cb(error);
-            else if (!left)
-                cb(ERR_NONE, archive);
-            else
-                next();
+            if (error)      cb(error);
+            else if (!left) cb(ERR_NONE, archive);
+            else            next();
         });
     });
 }
 
+Entries.exists = function(archive, entry, path) {
+    return archive.isEntryDownloaded(entry) &&
+           fs.existsSync(path);
+}
+
+
 function asyncEach(source, fn) {
     var items = source.slice();
     var next = error => {
-        if (!error && items.length > 0)
-            setTimeout(() => fn(items.shift(), next, items.length), 0);
+        if (error || !items.length) return;
+        setTimeout(() => fn(items.shift(),
+                            next,
+                            items.length), 0);
     }; next();
 }
+
 
 module.exports = Archiver;
