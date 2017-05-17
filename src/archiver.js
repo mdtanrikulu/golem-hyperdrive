@@ -41,11 +41,11 @@ Archiver.prototype.id = function() {
 Archiver.prototype.stat = function(discoveryKey, cb) {
     var core = this.drive.core;
     core._feeds.get(discoveryKey, (error, feed) => {
-        if (error) 
+        if (error)
             cb(error);
-        else if (feed) 
+        else if (feed)
             cb(ERR_NONE, feed);
-        else 
+        else
             cb(ERR_FEED_NOT_FOUND);
     });
 }
@@ -88,12 +88,16 @@ Archiver.prototype.replicate = function(peer) {
         var discoveryKey = discoveryKeyBuffer.toString('hex');
 
         self.stat(discoveryKey, (error, feedInfo) => {
-            if (error) return logger.error('Upload error:', error);
-            
+            if (error) {
+                logger.error('Upload error:', error);
+                return stream.close();
+            }
+
             var feed = self.createFeed(feedInfo);
-            logger.info("Uploading", feed.key 
-                        ? feed.key.toString('hex') 
-                        : 'discoveryKey ' + discoveryKey);
+            logger.debug("Uploading", feed.key
+                         ? feed.key.toString('hex')
+                         : 'discoveryKey ' + discoveryKey,
+                         peer);
             feed.replicate({ stream: stream });
         })
     });
@@ -185,7 +189,7 @@ Entries.copy = function(archive, destination, cb) {
             if (!Entries.is_file(entry)) return next();
 
             const dest = paths[entry.name];
-            
+
             try {
                 mkdirp.sync(path.dirname(dest));
             } catch (error) {
@@ -194,7 +198,7 @@ Entries.copy = function(archive, destination, cb) {
 
             var rs = archive.createFileReadStream(entry);
             var ws = fs.createWriteStream(dest);
-        
+
             rs.on('error', err => logger.error('ReadStream error [copy]:', err));
             ws.on('error', err => logger.error('WriteStream error [copy]:', err));
 

@@ -175,11 +175,14 @@ HyperG.prototype.download = function(key, destination) {
                 logger.debug('UTP swarm', key,
                              addresses.UTP.address + ':' + addresses.UTP.port);
 
-            downloadSwarm.join(archive.discoveryKey);
+            downloadSwarm.join(hash.discoveryKey(key));
             archive.open(on_open);
         });
 
-        downloadSwarm.listen(0);
+        downloadSwarm.listen({
+            host: self.options.host,
+            port: 0
+        });
     });
 }
 
