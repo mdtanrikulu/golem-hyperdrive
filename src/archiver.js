@@ -88,10 +88,8 @@ Archiver.prototype.replicate = function(peer) {
         var discoveryKey = discoveryKeyBuffer.toString('hex');
 
         self.stat(discoveryKey, (error, feedInfo) => {
-            if (error) {
-                logger.error('Upload error:', error);
-                return stream.close();
-            }
+            if (error)
+                return logger.error('Upload error:', error);
 
             var feed = self.createFeed(feedInfo);
             logger.debug("Uploading", feed.key
