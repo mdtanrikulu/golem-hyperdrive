@@ -136,7 +136,7 @@ HyperG.prototype.download = function(key, destination) {
         /* Download or copy existing archive */
         self.archiver.want(key, onArchive, () => {
             logger.info('Downloading', key);
-            /* Join discovery for key*/
+            /* Join discovery for key */
             self.swarm.join(discoveryKey)
         });
     });

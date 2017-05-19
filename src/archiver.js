@@ -1,25 +1,21 @@
 const encoding = require('hyperdrive-encoding')
 const eos = require('end-of-stream');
 const fs = require('fs');
-const hash = require('hypercore/lib/hash');
 const mkdirp = require('mkdirp');
 const path = require('path');
 const pump = require('pump');
-
-const logger = require('./logger');
 
 const Feed = require('hypercore/lib/feed');
 const Hyperdrive = require('hyperdrive');
 const Level = require('level');
 const Subleveldown = require('subleveldown');
 
+const logger = require('./logger');
+
 /* Error codes */
 const ERR_NONE = null,
       ERR_NOT_FOUND = 1,
       ERR_FEED_OPEN = 2;
-
-/* Storage options */
-const MAX_PEER_AGE = 7 * 24 * 3600 * 1000;
 
 /* Path regular expressions */
 const rel_re = /^(\.\.[\/\\])+/;
@@ -66,7 +62,9 @@ Archiver.prototype.want = function(key, onArchive, cb) {
 }
 
 Archiver.prototype.unwant = function(key, cb) {
-    this.callbacks[key] = this.callbacks[key].filter(c => c != cb);
+    if (this.callbacks[key])
+        this.callbacks[key] = 
+            this.callbacks[key].filter(c => c != cb);
 }
 
 Archiver.prototype.get = function(key, cb) {
@@ -89,6 +87,7 @@ Archiver.prototype.create = function(files, cb) {
 
     Entries.add(archive, files, (error, files) => {
         if (error) return cb(error);
+
         const key = archive.key.toString('hex');
         const discoveryKey = archive.discoveryKey.toString('hex');
         self.addKey(archive, error => cb(error, files));
@@ -128,6 +127,7 @@ Archiver.prototype.replicate = function(peer) {
         });
     });
     /* Request all keys blindly */
+    // TODO: if peer.channel is set, try to download only that
     for (let key in self.callbacks)
         self.open(buffer(key), true, stream, null, key);
 
@@ -184,8 +184,8 @@ Archiver.prototype.addKey = function(feed, cb) {
     const key = feed.key.toString('hex');
     const discoveryKey = feed.discoveryKey.toString('hex');
 
-    this.keys.put(key, discoveryKey, { sync: true }, err =>
-        cb ? cb(err) : null
+    this.keys.put(key, discoveryKey, { sync: true }, error =>
+        cb ? cb(error) : null
     );
 }
 
