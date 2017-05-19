@@ -33,8 +33,10 @@
   "dependencies": {
     "datland-swarm-defaults": "1.0.0",
     "discovery-swarm": "4.0.2",
+    "end-of-stream": "1.4.0",
     "hypercore": "4.10.0",
     "hyperdrive": "7.9.0",
+    "hyperdrive-encoding": "2.0.1",
     "level": "1.5.0",
     "leveldown": "~1.5.0",
     "minimist": "1.2.0",
@@ -43,6 +45,7 @@
     "pump": "1.0.2",
     "rabin": "^1.4.0",
     "rimraf": "2.6.1",
+    "subleveldown": "2.1.0",
     "uuid": "^3.0.1",
     "winston": "^2.3.1"
   },
