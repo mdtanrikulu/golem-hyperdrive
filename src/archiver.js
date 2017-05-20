@@ -1,4 +1,5 @@
 const fs = require('fs');
+const hash = require('hypercore/lib/hash');
 const mkdirp = require('mkdirp');
 const path = require('path');
 const pump = require('pump');
@@ -19,23 +20,19 @@ const rel_re = /^(\.\.[\/\\])+/;
 const path_re = /\/|\\/;
 
 
-function Entries() {}
-
-
 function Archiver(options, streamOptions) {
-    const dir = path.dirname(options.db);
-    if (!fs.existsSync(dir))
-        mkdirp.sync(dir);
+    if (!fs.existsSync(options.db))
+        mkdirp.sync(options.db);
 
     this.db = Level(options.db);
     this.drive = Hyperdrive(this.db);
 
+    this.options = options;
     this.streamOptions = Object.assign({
         timeout: 5000,
         maxListeners: 0
     }, streamOptions || {});
 }
-
 
 Archiver.prototype.id = function() {
     return this.drive.core.id;
@@ -44,17 +41,14 @@ Archiver.prototype.id = function() {
 Archiver.prototype.stat = function(discoveryKey, cb) {
     var core = this.drive.core;
     core._feeds.get(discoveryKey, (error, feed) => {
-        if (error)
-            cb(error);
-        else if (feed)
-            cb(ERR_NONE, feed);
-        else
-            cb(ERR_FEED_NOT_FOUND);
+        if (error)     cb(error);
+        else if (feed) cb(ERR_NONE, feed);
+        else           cb(ERR_FEED_NOT_FOUND);
     });
 }
 
 Archiver.prototype.create = function(files, cb) {
-    var archive = this.createArchive();
+    var archive = this.drive.createArchive();
     Entries.archive(archive, files, cb);
 }
 
@@ -62,21 +56,8 @@ Archiver.prototype.remove = function(discoveryKey, cb) {
     var self = this;
     var core = self.drive.core;
 
-    self.stat(discoveryKey, (error, feed) => {
-        if (error) return cb(error);
-
-        core._feeds.del(discoveryKey, null, error => {
-            cb(error, discoveryKey);
-        });
-    })
-}
-
-Archiver.prototype.open = function(discoveryKey, cb) {
-    var self = this;
-    self.stat(discoveryKey, (error, feed) => {
-        const hasContent = !error && feed;
-        var archive = self.createArchive(discoveryKey, hasContent, feed);
-        archive.open(cb);
+    core._feeds.del(discoveryKey, null, error => {
+        cb(error, discoveryKey);
     });
 }
 
@@ -87,32 +68,20 @@ Archiver.prototype.replicate = function(peer) {
     stream.setTimeout(this.streamOptions.timeout, stream.destroy);
     stream.setMaxListeners(this.streamOptions.maxListeners);
 
-    stream.on('open', discoveryKeyBuffer => {
-        var discoveryKey = discoveryKeyBuffer.toString('hex');
+    stream.on('open', discoveryBuffer => {
+        var discoveryKey = discoveryBuffer.toString('hex');
 
         self.stat(discoveryKey, (error, feedInfo) => {
             if (error)
-                return logger.error('Upload error:', error);
+                return logger.debug('Upload error:', error);
 
             var feed = self.createFeed(feedInfo);
-            logger.debug("Uploading", feed.key
-                         ? feed.key.toString('hex')
-                         : 'discoveryKey ' + discoveryKey);
+            logger.debug("Uploading", feed.key.toString('hex'));
             feed.replicate({ stream: stream });
         })
     });
 
     return stream;
-}
-
-Archiver.prototype.createArchive = function(key, feedInfo) {
-    var feed, hasContent = !!feedInfo;
-    if (hasContent)
-        feed = this.createFeed(feedInfo);
-
-    var archive = this.drive.createArchive(key, { metadata: feed });
-    archive.owner = hasContent;
-    return archive;
 }
 
 Archiver.prototype.createFeed = function(feedInfo) {
@@ -129,6 +98,12 @@ Archiver.prototype.copyArchive = function(archive, destination, cb) {
 }
 
 
+function Entries() {}
+
+Entries.is_file = function(entry) {
+    return entry && entry.type == 'file' && entry.name;
+}
+
 Entries.path = function(entry, destination) {
     const name = entry.hasOwnProperty('name') ? entry.name : entry;
     const joined = path.join.apply(path, name.split(path_re));
@@ -136,14 +111,10 @@ Entries.path = function(entry, destination) {
     return path.join(destination, relative);
 }
 
-Entries.is_file = function(entry) {
-    return entry && entry.type == 'file' && entry.name;
-}
-
 Entries.map = function(entries, destination) {
     var paths = {};
 
-    for (var entry of entries)
+    for (let entry of entries)
         try {
             if (Entries.is_file(entry))
                 paths[entry.name] = Entries.path(entry, destination);
@@ -152,31 +123,6 @@ Entries.map = function(entries, destination) {
         }
 
     return paths;
-}
-
-Entries.list = function(entries, destination) {
-    var paths = [];
-
-    for (var entry of entries)
-        try {
-            if (Entries.is_file(entry)) {
-                var entryPath = Entries.path(entry, destination);
-                paths.push(entryPath);
-            }
-        } catch (e) {
-            logger.error('Entry path mapping error:', e);
-        }
-
-    return paths;
-}
-
-Entries.listArchive = function(archive, destination, cb) {
-    archive.list(null, (error, entries) => {
-        if (error)
-            eb(error);
-        else
-            cb(null, Entries.list(entries, destination));
-    });
 }
 
 Entries.save = function(archive, destination, cb) {
