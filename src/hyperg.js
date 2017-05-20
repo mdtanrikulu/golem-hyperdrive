@@ -81,8 +81,7 @@ HyperG.prototype.run = function() {
     /* Bind to port and start discovery */
     self.swarm.listen({
         host: self.options.host,
-        port: self.options.port,
-        id: self.id()
+        port: self.options.port
     });
 }
 
@@ -117,6 +116,7 @@ HyperG.prototype.addresses = function(swarm) {
 
 HyperG.prototype.download = function(key, destination) {
     var self = this;
+
     const keyBuffer = Buffer(key, 'hex');
     const discoveryBuffer = hash.discoveryKey(keyBuffer);
 
@@ -179,5 +179,8 @@ HyperG.prototype.cancel = function(key) {
     });
 }
 
+function discovery(value) {
+    return hash.discoveryKey(buffer(value));
+}
 
 module.exports = HyperG;

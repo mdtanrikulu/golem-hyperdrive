@@ -48,9 +48,8 @@ FeedTracker.prototype.close = function(feed) {
 
 
 function Archiver(options, streamOptions) {
-    const dir = path.dirname(options.db);
-    if (!fs.existsSync(dir))
-        mkdirp.sync(dir);
+    if (!fs.existsSync(options.db))
+        mkdirp.sync(options.db);
 
     this.db = new Level(options.db);
     this.drive = new Hyperdrive(this.db);
@@ -61,6 +60,7 @@ function Archiver(options, streamOptions) {
     this.keys = {};
     this.callbacks = {};
 
+    this.options = options;
     this.streamOptions = Object.assign({
         timeout: 5000,
         maxListeners: 0
