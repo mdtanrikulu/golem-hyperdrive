@@ -1,6 +1,7 @@
 const encoding = require('hyperdrive-encoding')
 const eos = require('end-of-stream');
 const fs = require('fs');
+const hash = require('hypercore/lib/hash');
 const mkdirp = require('mkdirp');
 const path = require('path');
 const pump = require('pump');
@@ -8,7 +9,6 @@ const pump = require('pump');
 const Feed = require('hypercore/lib/feed');
 const Hyperdrive = require('hyperdrive');
 const Level = require('level');
-const Subleveldown = require('subleveldown');
 
 const logger = require('./logger');
 
@@ -22,27 +22,50 @@ const rel_re = /^(\.\.[\/\\])+/;
 const path_re = /\/|\\/;
 
 
-function Entries() {}
+function FeedTracker(create) {
+    this.create = create;
+    this.feeds = {};
+}
+
+FeedTracker.prototype.open = function(key, feed) {
+    const discoveryKey = discovery(key);
+    this.feeds[discoveryKey] = this.feeds[discoveryKey] || {
+        count: 0,
+        feed: feed || this.create(key)
+    };
+
+    this.feeds[discoveryKey].count += 1;
+    return this.feeds[discoveryKey].feed;
+}
+
+FeedTracker.prototype.close = function(feed) {
+    const discoveryKey = feed.discoveryKey.toString('hex');
+    if (--this.feeds[discoveryKey].count <= 0) {
+        delete this.feeds[discoveryKey];
+        feed.close();
+    }
+}
+
 
 function Archiver(options, streamOptions) {
     const dir = path.dirname(options.db);
     if (!fs.existsSync(dir))
         mkdirp.sync(dir);
 
-    this.db = Level(options.db);
-    this.drive = Hyperdrive(this.db);
-    this.keys = Subleveldown(this.db, 'keys', { 
-        valueEncoding: 'binary'
-    });
+    this.db = new Level(options.db);
+    this.drive = new Hyperdrive(this.db);
+    this.feedTracker = new FeedTracker(mixed =>
+        this.createFeed(mixed)
+    );
 
+    this.keys = {};
     this.callbacks = {};
-    
+
     this.streamOptions = Object.assign({
         timeout: 5000,
         maxListeners: 0
     }, streamOptions || {});
 }
-
 
 Archiver.prototype.id = function() {
     return this.drive.core.id;
@@ -50,34 +73,33 @@ Archiver.prototype.id = function() {
 
 Archiver.prototype.want = function(key, onArchive, cb) {
     var self = this;
-
     self.get(key, (error, archive) => {
         if (archive) return onArchive(null, archive);
 
         this.callbacks[key] = this.callbacks[key] || [];
         this.callbacks[key].push(onArchive);
-        this.createFeed(key);
+        this.keys[discovery(key)] = key;
+
         cb();
     });
 }
 
 Archiver.prototype.unwant = function(key, cb) {
     if (this.callbacks[key])
-        this.callbacks[key] = 
+        this.callbacks[key] =
             this.callbacks[key].filter(c => c != cb);
 }
 
-Archiver.prototype.get = function(key, cb) {
+Archiver.prototype.get = function(key, cb, asFeed) {
     var self = this;
     var feeds = self.drive.core._feeds;
 
-    self.keys.get(key, (error, discoveryKey) => {
+    feeds.get(discovery(key), (error, feed) => {
         if (error) return cb(error);
-
-        feeds.get(discoveryKey, (error, feed) => {
-            if (error) return cb(error);
-            cb(null, self.createArchive(key, feed));
-        });
+        var result = asFeed
+            ? self.createFeed(feed)
+            : self.createArchive(key, feed);
+        cb(ERR_NONE, result);
     });
 }
 
@@ -87,10 +109,7 @@ Archiver.prototype.create = function(files, cb) {
 
     Entries.add(archive, files, (error, files) => {
         if (error) return cb(error);
-
-        const key = archive.key.toString('hex');
-        const discoveryKey = archive.discoveryKey.toString('hex');
-        self.addKey(archive, error => cb(error, files));
+        cb(ERR_NONE, files);
     });
 }
 
@@ -98,15 +117,13 @@ Archiver.prototype.remove = function(key, cb) {
     var self = this;
     var feeds = self.drive.core._feeds;
 
-    self.keys.get(key, (error, discoveryKey) =>
-        self.keys.del(key, null, error => {
+    feeds.del(discovery(key), null, error =>
+        cb(error, key)
+    );
+}
 
-            if (error) return cb(error);
-            feeds.del(discoveryKey, null, error =>
-                cb(error, discoveryKey)
-            );
-        })
-    )
+Archiver.prototype.save = function(archive, destination, cb) {
+    Entries.save(archive, destination, cb);
 }
 
 Archiver.prototype.replicate = function(peer) {
@@ -116,86 +133,103 @@ Archiver.prototype.replicate = function(peer) {
 
     stream.setMaxListeners(self.streamOptions.maxListeners);
     stream.setTimeout(self.streamOptions.timeout, stream.destroy);
+    stream.openForReplication = false;
+
     /* Respond to other side's request */
     stream.on('open', discoveryBuffer => {
-        const discoveryKey = discoveryBuffer.toString('hex');
+        stream.openForReplication = true;
 
-        feeds.get(discoveryKey, (error, feed) => {
-            if (error) return;
-            feed = self.createFeed(feed);
-            self.open(feed.key, true, stream, feed);
-        });
+        const discoveryKey = discoveryBuffer.toString('hex');
+        const onFeed = (error, feed) => {
+            if (error)
+                return;
+
+            var key = feed.key.toString('hex');
+            var feed = self.createFeed(feed);
+
+            logger.debug('Replicate', key);
+            self.open(key, true, stream, key, feed);
+        }
+
+        feeds.get(discoveryKey, onFeed);
     });
-    /* Request all keys blindly */
-    // TODO: if peer.channel is set, try to download only that
-    for (let key in self.callbacks)
-        self.open(buffer(key), true, stream, null, key);
+
+    /* Request feeds */
+    setTimeout(() => {
+        if (peer.channel) {
+            const discoveryKey = peer.channel.toString('hex');
+            const key = self.keys[discoveryKey];
+            if (key && !stream.openForReplication) {
+                logger.debug('Direct connection',
+                            `${peer.host}:${peer.port}`, key);
+                return self.open(key, true, stream, key);
+            }
+        }
+    }, 0);
 
     return stream;
 }
 
-Archiver.prototype.open = function(keyBuffer, maybeContent, stream, feed, key) {
+Archiver.prototype.open = function(curKey, maybeContent, stream, parent, feed) {
     var self = this;
 
-    feed = feed || this.createFeed(keyBuffer);
-    if (!maybeContent)
-        feed.on('download-finished', () => self.replicationFinished(key));
+    feed = self.feedTracker.open(curKey, feed);
+    parent = typeof(parent) === 'object' ? parent : feed;
+
+    feed.once('download-finished', () => {
+        if (!maybeContent || parent != feed) {
+            if (!parent.content) parent.content = feed;
+            self.replicationFinished(parent.key.toString('hex'));
+        }
+    });
+
     feed.replicate({ stream: stream });
 
-    const close = () => feed.close();
     if (stream.destroyed)
-        close();
+        self.feedTracker.close(feed);
     else
-        eos(stream, close);
+        eos(stream, () => self.feedTracker.close(feed));
 
-    if (maybeContent)
-        feed.get(0, (error, data) => {
-            if (self.decodeContent(stream, error, data, key))
-                return;
-            if (feed.blocks)
-                feed.get(feed.blocks - 1, (error, data) =>
-                    self.decodeContent(stream, error, data, key)
-                );
-        });
+    if (!maybeContent)
+        return feed;
+
+    feed.get(0, (error, data) => {
+        if (self.decodeContent(error, stream, data, parent))
+            return;
+        if (feed.blocks) {
+            feed.get(feed.blocks - 1, (error, data) =>
+                self.decodeContent(error, stream, data, parent)
+            );
+        }
+    });
 
     return feed;
 }
 
-Archiver.prototype.decodeContent = function(stream, error, data, key) {
-    if (error) return false;
+Archiver.prototype.decodeContent = function(error, stream, data, parent) {
+    var key = error ? null : this.feedKey(data);
+    if (key) this.open(key, false, stream, parent);
+    return !!key;
+}
 
-    var feedKey;
+Archiver.prototype.feedKey = function(data) {
     try {
         var index = encoding.decode(data);
         if (index.type === 'index' &&
             index.content &&
             index.content.length === 32)
-            feedKey = index.content;
+            return index.content;
     } catch (err) {}
-
-    if (feedKey) {
-        this.createFeed(feedKey);
-        this.open(feedKey, false, stream, null, key);
-    }
-    return !!feedKey;
-}
-
-Archiver.prototype.addKey = function(feed, cb) {
-    const key = feed.key.toString('hex');
-    const discoveryKey = feed.discoveryKey.toString('hex');
-
-    this.keys.put(key, discoveryKey, { sync: true }, error =>
-        cb ? cb(error) : null
-    );
 }
 
 Archiver.prototype.replicationFinished = function(key, error) {
     var self = this;
     var callbacks = self.callbacks[key];
 
-    if (!callbacks) return;
     delete self.callbacks[key];
-    
+    if (!callbacks) return;
+
+    logger.debug('Replication finished', key)
     self.get(key, (error, archive) =>
         self.replicationCallbacks(callbacks, error, archive)
     );
@@ -203,28 +237,26 @@ Archiver.prototype.replicationFinished = function(key, error) {
 
 Archiver.prototype.replicationCallbacks = function(callbacks, error, data) {
     asyncEach(callbacks, (callback, next) => {
-        try {
-            callback(error, data);
-        } catch (exc) {
-            logger.error('Error in replication callback', exc);
-        } next();
+        try { callback(error, data) } catch (exc) {}
+        next();
     });
 }
 
 Archiver.prototype.createFeed = function(mixed) {
-    var feed;
+    const fromString = typeof(mixed) === 'string' ||
+        Buffer.isBuffer(mixed);
 
-    if (Buffer.isBuffer(mixed) || typeof(mixed) == 'string') {
-        feed = Feed(this.drive.core, { 
-            key: buffer(mixed),
-            valueEncoding: this.drive.core._valueEncoding
-        });
-        this.addKey(feed);
+    var feed = null;
+    var feedOptions = {
+        key: fromString ? buffer(mixed) : mixed.key,
+        valueEncoding: this.drive.core._valueEncoding
+    };
+
+    if (fromString) {
+        feed = Feed(this.drive.core, feedOptions);
     } else {
-        feed = Feed(this.drive.core, Object.assign({}, { 
-            key: buffer(mixed.key),
-            valueEncoding: this.drive.core._valueEncoding
-        }, mixed));
+        feedOptions = Object.assign(feedOptions, mixed);
+        feed = Feed(this.drive.core, feedOptions, mixed);
         feed.prefix = mixed.prefix;
     }
 
@@ -235,9 +267,8 @@ Archiver.prototype.createArchive = function(key, feed) {
     return this.drive.createArchive(key, { metadata: feed });
 }
 
-Archiver.prototype.save = function(archive, destination, cb) {
-    Entries.save(archive, destination, cb);
-}
+
+function Entries() {}
 
 
 Entries.path = function(entry, destination) {
@@ -276,7 +307,7 @@ Entries.save = function(archive, destination, cb) {
 
             if (Entries.exists(archive, entry, dest)) {
                 if (left) return next();
-                return cb(null, files);
+                return cb(ERR_NONE, files);
             }
 
             try {
@@ -337,6 +368,11 @@ function buffer(value) {
     if (Buffer.isBuffer(value))
         return value;
     return Buffer(value, 'hex');
+}
+
+function discovery(key) {
+    return hash.discoveryKey(buffer(key))
+        .toString('hex');
 }
 
 
