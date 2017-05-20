@@ -40,8 +40,6 @@ function HyperG(options) {
     self.swarmOptions = {
         utp: true,
         tcp: true,
-        dht: true,
-        dns: true,
         hash: false
     };
     self.swarm = new Swarm(new SwarmDefaults(
@@ -120,7 +118,7 @@ HyperG.prototype.addresses = function(swarm) {
 HyperG.prototype.download = function(key, destination) {
     var self = this;
     const keyBuffer = Buffer(key, 'hex');
-    const discoveryKey = hash.discoveryKey(keyBuffer);
+    const discoveryBuffer = hash.discoveryKey(keyBuffer);
 
     return new Promise((cb, eb) => {
         /* When archive is created / read from db */
@@ -137,7 +135,7 @@ HyperG.prototype.download = function(key, destination) {
         self.archiver.want(key, onArchive, () => {
             logger.info('Downloading', key);
             /* Join discovery for key */
-            self.swarm.join(discoveryKey)
+            self.swarm.join(discoveryBuffer);
         });
     });
 }
@@ -156,7 +154,7 @@ HyperG.prototype.upload = function(id, files) {
                 self.swarm.join(archive.discoveryKey);
                 /* Callback */
                 const key = archive.key.toString('hex');
-                logger.info('Sharing', key); 
+                logger.info('Sharing', key);
                 cb(key);
             });
         });
