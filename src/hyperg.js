@@ -39,8 +39,6 @@ function HyperG(options) {
     self.swarmOptions = {
         utp: true,
         tcp: true,
-        dht: true,
-        dns: true,
         hash: false
     }
 
@@ -51,6 +49,7 @@ function HyperG(options) {
         })
     ));
 
+    self.networks = [];
     self.running = false;
 }
 
@@ -98,8 +97,7 @@ HyperG.prototype.run = function() {
 
     self.swarm.listen({
         host: self.options.host,
-        port: self.options.port,
-        id: self.id()
+        port: self.options.port
     });
 }
 
@@ -118,7 +116,8 @@ HyperG.prototype.uploadFiles = function(files) {
 
             archive.finalize(error => {
                 if (error) return eb(error);
-                var key = archive.key.toString('hex');
+
+                const key = archive.key.toString('hex');
                 self.swarm.join(archive.discoveryKey);
 
                 logger.info('Sharing', key);
@@ -131,7 +130,9 @@ HyperG.prototype.uploadFiles = function(files) {
 
 HyperG.prototype.uploadArchive = function(key) {
     var self = this;
-    var discoveryKey = hash.discoveryKey(key).toString('hex');
+
+    const discoveryBuffer = discovery(key);
+    const discoveryKey = discoveryBuffer.toString('hex');
 
     return new Promise((cb, eb) =>
         self.archiver.stat(discoveryKey, error => {
@@ -149,37 +150,51 @@ HyperG.prototype.download = function(key, destination) {
     var archive = self.archiver.drive.createArchive(key);
 
     var options = Object.assign({}, self.swarmOptions, {
-        stream: peer => archive.replicate()
+        id: archive.id || discovery(key),
+        stream: peer => archive.replicate({
+            download: true,
+            upload: false
+        })
     });
 
+    const join = function(name) {
+        name = buffer(name);
+
+        if (!(this._listening || this._adding))
+            this._listenNext();
+        if (this._adding)
+            this._adding.push(name);
+        else
+            this._discovery.join(name, this.address().port,
+                                 { impliedPort: false });
+    }
+
     var downloadSwarm = new Swarm(new SwarmDefaults(options));
-    HyperG._patch_join(downloadSwarm);
+    //downloadSwarm.join = join.bind(downloadSwarm);
 
     return new Promise((cb, eb) => {
 
         const onOpen = error => {
             if (error) return eb(error);
 
-            const onCopy = (error, files) => {
+            self.archiver.copyArchive(archive, destination,
+                                      (error, files) => {
                 if (error) return eb(error);
 
-                archive.finalize(() => archive.close(() => {
-                    logger.info('Downloaded', key);
-                    downloadSwarm.leave(archive.discoveryKey);
+                logger.info('Downloaded', key);
+                downloadSwarm.leave(archive.discoveryKey);
+
+                archive.close(() => {
                     self.closeSwarm(downloadSwarm);
                     cb(files);
-                }));
-            }
-
-            self.archiver.copyArchive(archive, destination,
-                                      onCopy);
+                });
+            });
         }
 
         downloadSwarm.once('error', eb);
         downloadSwarm.once('listening', () => {
-            logger.info("Looking up", key);
-
             var addresses = self.addresses(downloadSwarm);
+
             if ('TCP' in addresses)
                 logger.debug('TCP swarm', key,
                              addresses.TCP.address + ':' +
@@ -189,6 +204,7 @@ HyperG.prototype.download = function(key, destination) {
                              addresses.UTP.address + ':' +
                              addresses.UTP.port);
 
+            logger.info("Looking up", key);
             downloadSwarm.join(archive.discoveryKey);
             archive.open(onOpen);
         });
@@ -219,13 +235,12 @@ HyperG.prototype.addresses = function(swarm) {
 
 HyperG.prototype.cancel = function(key) {
     var self = this;
-    var discoveryKeyBuffer = hash.discoveryKey(key);
+
+    const discoveryBuffer = discovery(key);
+    const discoveryKey = discoveryBuffer.toString('hex');
 
     return new Promise((cb, eb) => {
-        var discoveryKey = discoveryKeyBuffer.toString('hex');
-        // FIXME: close active connections
-        self.swarm.leave(discoveryKeyBuffer);
-        // FIXME: remove actual data
+        self.swarm.leave(discoveryBuffer);
         self.archiver.remove(discoveryKey, error => {
             if (error) return eb(error);
             logger.info("Canceling", key);
@@ -243,36 +258,29 @@ HyperG.prototype.closeSwarm = function(swarm) {
 
     if (swarm._utp) {
         swarm._utp.connect = nop;
+        /* FIXME: proper teardown
         for (var conn of swarm._utp.connections)
             conn.destroy()
-        // swarm._utp.close();
+        swarm._utp.close();*/
     }
 
     if (swarm._tcp) {
         swarm._tcp.connect = nop;
+        /* FIXME: proper teardown
         swarm._tcpConnections.destroy()
-        // swarm._tcp.close();
+        swarm._tcp.close();*/
     }
 }
 
-HyperG._patch_join = function(swarm) {
-    const join = function(name) {
-        name = toBuffer(name)
-
-        if (!this._listening && !this._adding)
-            this._listenNext();
-
-        if (this._adding)
-            this._adding.push(name);
-        else
-            this._discovery.join(name, null, {
-                impliedPort: !!this._utp
-            });
-    }
-
-    swarm.join = join.bind(swarm);
+function buffer(value) {
+    if (Buffer.isBuffer(value))
+        return value;
+    return new Buffer(value, 'hex');
 }
 
+function discovery(value) {
+    return hash.discoveryKey(buffer(value));
+}
 
 const nop = () => {};
 
