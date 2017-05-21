@@ -4,11 +4,12 @@ const mkdirp = require('mkdirp');
 const path = require('path');
 const pump = require('pump');
 
-const logger = require('./logger');
-
 const Feed = require('hypercore/lib/feed');
 const Hyperdrive = require('hyperdrive');
 const Level = require('level');
+
+const common = require('./common');
+const logger = require('./logger');
 
 /* Error codes */
 const ERR_NONE = null,
@@ -21,6 +22,8 @@ const path_re = /\/|\\/;
 
 
 function Archiver(options, streamOptions) {
+    options.db = path.join(options.db, common.version);
+
     if (!fs.existsSync(options.db))
         mkdirp.sync(options.db);
 
