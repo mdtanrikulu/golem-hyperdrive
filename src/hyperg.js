@@ -37,7 +37,7 @@ function HyperG(options) {
                              self.options.rpc_host);
 
     self.swarmOptions = {
-        utp: true,
+        utp: false,
         tcp: true,
         hash: false
     }
@@ -87,11 +87,11 @@ HyperG.prototype.run = function() {
                                 ':' +
                                 addresses.TCP.port);
 
-                if ('UTP' in addresses)
-                    logger.info('UTP listening on',
-                                addresses.UTP.address +
+                if ('uTP' in addresses)
+                    logger.info('uTP listening on',
+                                addresses.uTP.address +
                                 ':' +
-                                addresses.UTP.port);
+                                addresses.uTP.port);
             }, HyperG.exit)
     );
 
@@ -157,20 +157,7 @@ HyperG.prototype.download = function(key, destination) {
         })
     });
 
-    const join = function(name) {
-        name = buffer(name);
-
-        if (!(this._listening || this._adding))
-            this._listenNext();
-        if (this._adding)
-            this._adding.push(name);
-        else
-            this._discovery.join(name, this.address().port,
-                                 { impliedPort: false });
-    }
-
     var downloadSwarm = new Swarm(new SwarmDefaults(options));
-    //downloadSwarm.join = join.bind(downloadSwarm);
 
     return new Promise((cb, eb) => {
 
@@ -199,10 +186,10 @@ HyperG.prototype.download = function(key, destination) {
                 logger.debug('TCP swarm', key,
                              addresses.TCP.address + ':' +
                              addresses.TCP.port);
-            if ('UTP' in addresses)
-                logger.debug('UTP swarm', key,
-                             addresses.UTP.address + ':' +
-                             addresses.UTP.port);
+            if ('uTP' in addresses)
+                logger.debug('uTP swarm', key,
+                             addresses.uTP.address + ':' +
+                             addresses.uTP.port);
 
             logger.info("Looking up", key);
             downloadSwarm.join(archive.discoveryKey);
@@ -229,7 +216,7 @@ HyperG.prototype.addresses = function(swarm) {
     if (swarm._tcp)
         result.TCP = serverAddress(swarm._tcp);
     if (swarm._utp)
-        result.UTP = serverAddress(swarm._utp);
+        result.uTP = serverAddress(swarm._utp);
     return result;
 }
 
@@ -249,7 +236,8 @@ HyperG.prototype.cancel = function(key) {
     });
 }
 
-// FIXME: close servers
+
+/* FIXME: proper teardown */
 HyperG.prototype.closeSwarm = function(swarm) {
     if (swarm._discovery) {
         swarm._kick = nop;
@@ -266,9 +254,8 @@ HyperG.prototype.closeSwarm = function(swarm) {
 
     if (swarm._tcp) {
         swarm._tcp.connect = nop;
-        /* FIXME: proper teardown
         swarm._tcpConnections.destroy()
-        swarm._tcp.close();*/
+        swarm._tcp.close();
     }
 }
 
