@@ -169,11 +169,12 @@ HyperG.prototype.download = function(key, destination) {
                 if (error) return eb(error);
 
                 logger.info('Downloaded', key);
-                downloadSwarm.leave(archive.discoveryKey);
+                cb(files);
 
+                downloadSwarm.leave(archive.discoveryKey);
                 archive.close(() => {
+                    logger.debug('Closing swarm', key);
                     self.closeSwarm(downloadSwarm);
-                    cb(files);
                 });
             });
         }
