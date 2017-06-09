@@ -6,14 +6,18 @@ var threeDigits = (input) => ('00' + input).slice(-3);
 
 var timestamp = () => {
     var date = new Date();
-    return  twoDigits(date.getHours())   + ':' +
-            twoDigits(date.getMinutes()) + ':' +
-            twoDigits(date.getSeconds()) + '.' +
-            threeDigits(date.getMilliseconds());
+    // 2017-06-07 15:52:55.123
+    return date.getFullYear() + '-' +
+           twoDigits(date.getMonth()) + '-' +
+           twoDigits(date.getDate()) + ' ' +
+           twoDigits(date.getHours())   + ':' +
+           twoDigits(date.getMinutes()) + ':' +
+           twoDigits(date.getSeconds()) + '.' +
+           threeDigits(date.getMilliseconds());
 };
 
 var formatter = options =>
-    '[' + options.timestamp() + '] ' +
+    options.timestamp() + ' ' +
     '[' + common.application  + '] ' +
     '[' + options.level.toUpperCase() + '] ' +
     (options.message || '') +
