@@ -146,15 +146,17 @@ const archive = () => {
     var platform = getPlatform();
     var format = 'tar';
     var ext = 'tar.gz';
+    var options = {gzip: true};
 
     if (platform == 'win32') {
         platform = 'windows';
         ext = format = 'zip';
+        options = undefined;
     }
 
     var name = `${APP}_${package.version}_${platform}-x64.${ext}`;
     var output = fs.createWriteStream(`${DIST_DIR}/${name}`);
-    var archive = archiver(format);
+    var archive = archiver(format, options);
 
     output.on('error', console.error);
     output.on('close', () =>
