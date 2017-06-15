@@ -10,7 +10,7 @@ const rimraf = require('rimraf');
 const package = require('./package.json');
 
 const ABI = abi.getAbi();
-const APP = package.alias.toLowerCase();
+const APP = package.shortName.toLowerCase();
 
 const DIST_DIR = 'dist';
 const OUT_DIR = `${DIST_DIR}/${APP}`;
@@ -64,8 +64,9 @@ Dependencies.leveldown = () =>
 Dependencies.sodium = () =>
     copyModule('sodium-native', 'sodium', 51);
 
-Dependencies.utp = () =>
-    copyModule('utp-native', 'utp');
+if (package.features.utp === true)
+    Dependencies.utp = () =>
+        copyModule('utp-native', 'utp');
 
 
 function Patch() {

@@ -1,6 +1,7 @@
 const package = require('../package.json');
 
 module.exports = {
-    application: package.alias,
-    version: package.version
+    application: package.shortName,
+    version: package.version,
+    features: package.features
 }

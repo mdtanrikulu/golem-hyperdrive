@@ -1,6 +1,6 @@
 {
   "name": "golem-hyperdrive",
-  "alias": "HyperG",
+  "shortName": "HyperG",
   "version": "0.2.1",
   "description": "Hyperdrive client for the Golem project",
   "author": {
@@ -15,6 +15,9 @@
     "p2p",
     "replication"
   ],
+  "features": {
+    "utp": false
+  },
   "bin": {
     "hyperg": "src/index.js",
     "hyperg-client": "src/client.js"

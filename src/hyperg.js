@@ -37,7 +37,7 @@ function HyperG(options) {
                              self.options.rpc_host);
 
     self.swarmOptions = {
-        utp: false,
+        utp: common.features.utp === true,
         tcp: true,
         hash: false
     }
