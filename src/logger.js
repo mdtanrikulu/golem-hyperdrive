@@ -35,4 +35,8 @@ var logger = new winston.Logger({
     ]
 });
 
-module.exports = logger;
+module.exports = {
+    'logger': logger,
+    'timestamp': timestamp,
+    'formatter': formatter
+};

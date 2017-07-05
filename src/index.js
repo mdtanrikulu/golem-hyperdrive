@@ -6,7 +6,10 @@ const minimist = require('minimist');
 const common = require('./common');
 const Server = require('./hyperg');
 
-var options = minimist(process.argv.slice(2));
+var options = minimist(
+    process.argv.slice(2),
+    { 'string': ['logfile'] }
+);
 
 if (options.v || options.version)
     return console.log(common.version);

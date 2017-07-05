@@ -1,7 +1,7 @@
 const http = require('http');
 const assert = require('assert');
 
-const logger = require('./logger');
+const logger = require('./logger').logger;
 
 const DEFAULT_HOST = 'localhost';
 const DEFAULT_PORT = 3292;

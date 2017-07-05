@@ -9,7 +9,7 @@ const Hyperdrive = require('hyperdrive');
 const Level = require('level');
 
 const common = require('./common');
-const logger = require('./logger');
+const logger = require('./logger').logger;
 
 /* Error codes */
 const ERR_NONE = null,
