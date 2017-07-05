@@ -12,7 +12,9 @@ const Archiver = require('./archiver');
 const RPC = require('./rpc');
 
 const common = require('./common');
-const logger = require('./logger');
+const logger_module = require('./logger');
+const logger = logger_module.logger;
+const winston = require('winston');
 
 /* Unlimited event listeners */
 process.setMaxListeners(0);
@@ -31,6 +33,21 @@ function HyperG(options) {
         rpc_port: 3292,
         db: './' + common.application + '.db'
     }, options);
+
+    // setup file logging only if it was requested by a command-line
+    // argument.
+    if (options.logfile) {
+        console.log('Opening HyperG log file:', options.logfile);
+        logger.add(
+            winston.transports.File,
+            {
+                filename: options.logfile,
+                json: false,
+                timestamp: logger_module.timestamp,
+                formatter: logger_module.formatter
+            }
+        );
+    }
 
     self.archiver = new Archiver(self.options);
     self.rpc = new RPC(self, self.options.rpc_port,
