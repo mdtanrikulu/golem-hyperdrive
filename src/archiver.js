@@ -38,7 +38,7 @@ function Archiver(options, streamOptions) {
 }
 
 Archiver.prototype.id = function() {
-    return this.drive.core.id;
+    return this.drive.core.id.toString('hex');
 }
 
 Archiver.prototype.stat = function(discoveryKey, cb) {
