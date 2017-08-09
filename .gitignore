@@ -3,6 +3,9 @@ node_modules
 logs
 coverage
 
+heapdump-*
+package-lock.json
+
 dist/*
 
 *.log

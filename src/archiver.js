@@ -1,4 +1,4 @@
-const fs = require('fs');
+const fs = require('fs-extra')
 const hash = require('hypercore/lib/hash');
 const mkdirp = require('mkdirp');
 const path = require('path');
@@ -10,6 +10,9 @@ const Level = require('level');
 
 const common = require('./common');
 const logger = require('./logger').logger;
+
+const multiprogress = require('./lib/fs-readstreams-progress')
+const collectStats = require('./lib/fs-collect-stats')
 
 /* Error codes */
 const ERR_NONE = null,
@@ -52,6 +55,30 @@ Archiver.prototype.stat = function(discoveryKey, cb) {
 
 Archiver.prototype.create = function(files, cb) {
     var archive = this.drive.createArchive();
+
+    const strippath = filepath => filepath.replace(self.articlepath, '')
+
+    const errorStat = { size: 0 }
+    collectStats(files.map(file => file[0]), { errorStat: errorStat }, (err, data) => {
+      if (err) return console.log(err)
+      console.log("data.summary.size", data.summary.size);
+      data.files.forEach(f => {
+        const file = strippath(f.path)
+        console.log("f.size", f.size);
+      })
+    })
+
+    const update = data => console.log("progress:", data)
+
+    const remove = data => {
+      console.log("Completed", data)
+    }
+
+    multiprogress(files.map(file => file[0]), { fs: archive })
+     .on('progress', update)
+     .on('end', remove)
+     .drain()
+
     Entries.archive(archive, files, cb);
 }
 
@@ -59,7 +86,9 @@ Archiver.prototype.remove = function(discoveryKey, cb) {
     var self = this;
     var core = self.drive.core;
 
-    core._feeds.del(discoveryKey, null, error => {
+    core._feeds.del(discoveryKey, error => {
+        if(error)
+            cb(error, discoveryKey);
         cb(error, discoveryKey);
     });
 }

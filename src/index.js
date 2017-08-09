@@ -6,6 +6,12 @@ const minimist = require('minimist');
 const common = require('./common');
 const Server = require('./hyperg');
 
+const heapdump = require('heapdump');  
+
+heapdump.writeSnapshot(function(err, filename) {  
+  console.log('dump written to', filename);
+});
+
 var options = minimist(
     process.argv.slice(2),
     { 'string': ['logfile'] }

@@ -31,11 +31,13 @@ function download(options) {
 }
 
 function upload(options) {
+    console.log("options", options);
     var input_files = [options.u || options.upload];
     var files = {};
 
-    if (options._)
-        input_files.concat(options._);
+    if (options._.length > 0)
+        input_files = input_files.concat(options._);
+    console.log("input_files", input_files);
 
     for (var file of input_files)
         files[file] = path.basename(file)

@@ -165,7 +165,7 @@ HyperG.prototype.uploadArchive = function(key) {
 HyperG.prototype.download = function(key, destination) {
     var self = this;
     var archive = self.archiver.drive.createArchive(key);
-
+    console.log("Is there key?", discovery(key))
     var options = Object.assign({}, self.swarmOptions, {
         id: archive.id || discovery(key),
         stream: peer => archive.replicate({
@@ -183,7 +183,11 @@ HyperG.prototype.download = function(key, destination) {
 
             self.archiver.copyArchive(archive, destination,
                                       (error, files) => {
-                if (error) return eb(error);
+                                          console.log("files", files);
+                if (error) {
+                    console.log("SW error", error);
+                    return eb(error);
+                }
 
                 logger.info('Downloaded', key);
                 cb(files);
@@ -210,6 +214,7 @@ HyperG.prototype.download = function(key, destination) {
                              addresses.uTP.port);
 
             logger.info("Looking up", key);
+            console.log("archive.discoveryKey", archive.discoveryKey);
             downloadSwarm.join(archive.discoveryKey);
             archive.open(onOpen);
         });
