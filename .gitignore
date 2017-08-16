@@ -3,7 +3,7 @@ node_modules
 logs
 coverage
 
-heapdump-*
+heapdump
 package-lock.json
 
 dist/*
