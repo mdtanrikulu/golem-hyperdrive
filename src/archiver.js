@@ -56,6 +56,29 @@ Archiver.prototype.stat = function(discoveryKey, cb) {
 Archiver.prototype.create = function(files, cb) {
     var archive = this.drive.createArchive();
 
+    const strippath = filepath => filepath.replace(self.articlepath, '')
+
+    const errorStat = { size: 0 }
+    collectStats(files.map(file => file[0]), { errorStat: errorStat }, (err, data) => {
+      if (err) return console.log(err)
+      console.log("data.summary.size", data.summary.size);
+      data.files.forEach(f => {
+        const file = strippath(f.path)
+        console.log("f.size", f.size);
+      })
+    })
+
+    const update = data => console.log("progress:", data)
+
+    const remove = data => {
+      console.log("Completed", data)
+    }
+
+    multiprogress(files.map(file => file[0]), { fs: archive })
+     .on('progress', update)
+     .on('end', remove)
+     .drain()
+
     Entries.archive(archive, files, cb);
 }
 
@@ -141,17 +164,6 @@ Entries.save = function(archive, destination, cb) {
         const paths = Entries.map(entries, destination);
         const files = Object.keys(paths).map(k => paths[k]);
 
-        const update = data => console.log("download progress:", data)
-
-        const remove = data => {
-          console.log("Completed", data)
-        }
-
-        multiprogress(files, { fs: archive })
-         .on('progress', update)
-         .on('end', remove)
-         .drain()
-
         asyncEach(entries, (entry, next, left) => {
             if (!Entries.is_file(entry)) return next();
 
@@ -188,30 +200,6 @@ Entries.save = function(archive, destination, cb) {
 }
 
 Entries.archive = function(archive, files, cb) {
-
-    const strippath = filepath => filepath.replace(self.articlepath, '')
-
-    const errorStat = { size: 0 }
-    collectStats(files.map(file => file[0]), { errorStat: errorStat }, (err, data) => {
-      if (err) return console.log(err)
-      console.log("data.summary.size", data.summary.size);
-      data.files.forEach(f => {
-        const file = strippath(f.path)
-        console.log("f.size", f.size);
-      })
-    })
-
-    const update = data => console.log("progress:", data)
-
-    const remove = data => {
-      console.log("Completed", data)
-    }
-
-    multiprogress(files.map(file => file[0]), { fs: archive })
-     .on('progress', update)
-     .on('end', remove)
-     .drain()
-
     asyncEach(files, (file, next, left) => {
         const source = file[0];
         const name = file[1];

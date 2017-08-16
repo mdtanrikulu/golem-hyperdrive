@@ -183,6 +183,7 @@ HyperG.prototype.download = function(key, destination) {
 
             self.archiver.copyArchive(archive, destination,
                                       (error, files) => {
+                                          console.log("files", files);
                 if (error) {
                     console.log("SW error", error);
                     return eb(error);

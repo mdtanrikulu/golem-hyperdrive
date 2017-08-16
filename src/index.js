@@ -8,7 +8,7 @@ const Server = require('./hyperg');
 
 const heapdump = require('heapdump');  
 
-heapdump.writeSnapshot('./heapdump/heapdump-' + Date.now() + '.heapsnapshot', function(err, filename) {  
+heapdump.writeSnapshot(function(err, filename) {  
   console.log('dump written to', filename);
 });
 
