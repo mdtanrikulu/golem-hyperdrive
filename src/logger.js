@@ -26,7 +26,7 @@ var formatter = options =>
         : '' );
 
 var logger = new winston.Logger({
-    level: 'debug',
+    level: 'info',
     transports: [
         new winston.transports.Console({
             timestamp: timestamp,
@@ -35,8 +35,14 @@ var logger = new winston.Logger({
     ]
 });
 
+function setLevel(level) {
+    for (let transportName in logger.transports)
+        logger.transports[transportName].level = level;
+}
+
 module.exports = {
     'logger': logger,
+    'setLevel': setLevel,
     'timestamp': timestamp,
     'formatter': formatter
 };
