@@ -272,13 +272,16 @@ HyperG.prototype.closeSwarm = function(swarm) {
 
 HyperG.prototype.logSwarmEvents = function(swarm, postfix) {
     swarm.on('peer', peer =>
-        logger.debug('Peer discovery', postfix, peer)
+        logger.debug('Peer discovery', postfix,
+                     normalizePeer(peer))
     );
     swarm.on('drop', peer =>
-        logger.debug('Dropping peer', postfix, peer)
+        logger.debug('Dropping peer', postfix,
+                     normalizePeer(peer))
     );
     swarm.on('connecting', peer =>
-        logger.debug('Connecting to peer', postfix, peer)
+        logger.debug('Connecting to peer', postfix,
+                     normalizePeer(peer))
     );
     swarm.on('connection', (connection, info) => {
         logger.debug('New connection', postfix, info);
@@ -310,6 +313,14 @@ function loggingEb(eb) {
         logger.error(error);
         eb(error);
     };
+}
+
+function normalizePeer(peer) {
+    if (peer && peer.channel)
+        return Object.assign({}, peer, {
+            channel: peer.channel.toString('hex')
+        });
+    return peer;
 }
 
 const nop = () => {};
