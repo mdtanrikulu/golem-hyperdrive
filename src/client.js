@@ -34,11 +34,11 @@ function upload(options) {
     var input_files = [options.u || options.upload];
     var files = {};
 
-    if (options._)
-        input_files.concat(options._);
+    if (options._.length > 0)
+        input_files = input_files.concat(options._);
 
     for (var file of input_files)
-        files[file] = path.basename(file)
+        files[file] = path.basename(file);
 
     request({
         command: 'upload',

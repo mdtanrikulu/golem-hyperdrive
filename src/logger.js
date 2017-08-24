@@ -26,7 +26,7 @@ var formatter = options =>
         : '' );
 
 var logger = new winston.Logger({
-    level: 'info',
+    level: 'debug',
     transports: [
         new winston.transports.Console({
             timestamp: timestamp,

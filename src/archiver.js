@@ -39,7 +39,7 @@ function Archiver(options, streamOptions) {
 
 Archiver.prototype.id = function() {
     return this.drive.core.id.toString('hex');
-}
+};
 
 Archiver.prototype.stat = function(discoveryKey, cb) {
     var core = this.drive.core;
@@ -48,21 +48,19 @@ Archiver.prototype.stat = function(discoveryKey, cb) {
         else if (feed) cb(ERR_NONE, feed);
         else           cb(ERR_FEED_NOT_FOUND);
     });
-}
+};
 
 Archiver.prototype.create = function(files, cb) {
     var archive = this.drive.createArchive();
     Entries.archive(archive, files, cb);
-}
+};
 
 Archiver.prototype.remove = function(discoveryKey, cb) {
-    var self = this;
-    var core = self.drive.core;
-
-    core._feeds.del(discoveryKey, null, error => {
+    var core = this.drive.core;
+    core._feeds.del(discoveryKey, error => {
         cb(error, discoveryKey);
     });
-}
+};
 
 Archiver.prototype.replicate = function(peer) {
     var self = this;
@@ -74,6 +72,8 @@ Archiver.prototype.replicate = function(peer) {
     stream.on('open', discoveryBuffer => {
         var discoveryKey = discoveryBuffer.toString('hex');
 
+        logger.debug('Archive requested', discoveryKey, peer);
+
         self.stat(discoveryKey, (error, feedInfo) => {
             if (error)
                 return logger.debug('Upload error:', error);
@@ -81,11 +81,11 @@ Archiver.prototype.replicate = function(peer) {
             var feed = self.createFeed(feedInfo);
             logger.debug("Uploading", feed.key.toString('hex'));
             feed.replicate({ stream: stream });
-        })
+        });
     });
 
     return stream;
-}
+};
 
 Archiver.prototype.createFeed = function(feedInfo) {
     var feed = Feed(this.drive.core, Object.assign({}, {
@@ -94,25 +94,25 @@ Archiver.prototype.createFeed = function(feedInfo) {
 
     feed.prefix = feedInfo.prefix;
     return feed;
-}
+};
 
 Archiver.prototype.copyArchive = function(archive, destination, cb) {
     Entries.save(archive, destination, cb);
-}
+};
 
 
 function Entries() {}
 
 Entries.is_file = function(entry) {
     return entry && entry.type == 'file' && entry.name;
-}
+};
 
 Entries.path = function(entry, destination) {
     const name = entry.hasOwnProperty('name') ? entry.name : entry;
     const joined = path.join.apply(path, name.split(path_re));
     const relative  = path.normalize(joined).replace(rel_re, '');
     return path.join(destination, relative);
-}
+};
 
 Entries.map = function(entries, destination) {
     var paths = {};
@@ -126,7 +126,7 @@ Entries.map = function(entries, destination) {
         }
 
     return paths;
-}
+};
 
 Entries.save = function(archive, destination, cb) {
     archive.list(null, (error, entries) => {
@@ -145,7 +145,7 @@ Entries.save = function(archive, destination, cb) {
                 return cb(ERR_NONE, files);
             }
 
-            logger.debug('Save', entry.name, '=>\n', dest);
+            logger.debug('Saving', entry.name, '->', dest);
 
             try {
                 mkdirp.sync(path.dirname(dest));
@@ -168,7 +168,7 @@ Entries.save = function(archive, destination, cb) {
             });
         });
     });
-}
+};
 
 Entries.archive = function(archive, files, cb) {
     asyncEach(files, (file, next, left) => {
@@ -189,12 +189,12 @@ Entries.archive = function(archive, files, cb) {
             else            next();
         });
     });
-}
+};
 
 Entries.exists = function(archive, entry, path) {
     return archive.isEntryDownloaded(entry) &&
            fs.existsSync(path);
-}
+};
 
 
 function asyncEach(source, fn) {
