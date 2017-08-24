@@ -178,7 +178,7 @@ RPC.prototype._respond = function(data, response, code) {
 
     logger.debug(response.connection.remoteAddress,
                  response.connection.remotePort,
-                 '<-', response_data);
+                 '<-', data);
 
     response.statusCode = code || 200;
     response.setHeader('Content-Type', 'application/json');
