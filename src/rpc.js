@@ -105,7 +105,7 @@ RPC.prototype._commands = {
         assert.ok(json.hash);
         assert.ok(json.dest);
 
-        self.app.download(json.hash, json.dest)
+        self.app.download(json.hash, json.dest, json.peers)
             .then(files => {
                 self._respond({
                     files: files

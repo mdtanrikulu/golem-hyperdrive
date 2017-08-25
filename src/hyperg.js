@@ -10,10 +10,10 @@ const SwarmDefaults = require('datland-swarm-defaults');
 
 const Archiver = require('./archiver');
 const RPC = require('./rpc');
+const PeerConnector = require('./peers').PeerConnector;
 
 const common = require('./common');
 const logger = require('./logger').logger;
-const winston = require('winston');
 
 /* Unlimited event listeners */
 process.setMaxListeners(0);
@@ -151,11 +151,11 @@ HyperG.prototype.uploadArchive = function(key) {
     });
 };
 
-HyperG.prototype.download = function(key, destination) {
+HyperG.prototype.download = function(key, destination, peers) {
     var self = this;
-    var archive = self.archiver.drive.createArchive(key);
 
-    var options = Object.assign({}, self.swarmOptions, {
+    let archive = self.archiver.drive.createArchive(key);
+    let options = Object.assign({}, self.swarmOptions, {
         id: archive.id || discovery(key),
         stream: peer => archive.replicate({
             download: true,
@@ -163,10 +163,19 @@ HyperG.prototype.download = function(key, destination) {
         })
     });
 
-    var downloadSwarm = new Swarm(new SwarmDefaults(options));
+    let downloadSwarm = new Swarm(new SwarmDefaults(options));
+    let noDiscovery = Array.isArray(peers) && peers.length > 0;
+    let peerConnector;
 
-    return new Promise((cb, eb) => {
-        eb = loggingEb(eb);
+    return new Promise((cb, peb) => {
+        let eb = loggingEb(error => {
+            this.cancel(key);
+            peb(error);
+        });
+
+        let peerConnector = noDiscovery
+            ? new PeerConnector(downloadSwarm, key, eb)
+            : null;
 
         const onOpen = error => {
             if (error) return eb(error);
@@ -200,8 +209,13 @@ HyperG.prototype.download = function(key, destination) {
                              addresses.uTP.address + ':' +
                              addresses.uTP.port);
 
-            logger.info("Looking up", key);
-            downloadSwarm.join(archive.discoveryKey);
+            if (peerConnector)
+                peerConnector.connect(peers);
+            else {
+                logger.debug('Looking up', key);
+                downloadSwarm.join(archive.discoveryKey);
+            }
+
             archive.open(onOpen);
         });
 
