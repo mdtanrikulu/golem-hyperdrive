@@ -35,8 +35,14 @@ var logger = new winston.Logger({
     ]
 });
 
+function setLevel(level) {
+    for (let transportName in logger.transports)
+        logger.transports[transportName].level = level;
+}
+
 module.exports = {
     'logger': logger,
+    'setLevel': setLevel,
     'timestamp': timestamp,
     'formatter': formatter
 };
