@@ -20,7 +20,8 @@ RPC.prototype.listen = function() {
         self._route(self, request, response)
     );
 
-    self.server.setTimeout(2 * 60 * 1000);
+    // FIXME: keepalive
+    self.server.setTimeout(10 * 120 * 1000);
 
     self.server.on('error', error => {
         logger.error('Error listening on',

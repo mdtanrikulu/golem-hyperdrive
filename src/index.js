@@ -14,7 +14,7 @@ var options = minimist(
     process.argv.slice(2)
 );
 
-function usage(code) {
+function usage() {
     let s = "\t\t\t\t";
     console.log(common.application + " usage:", "\n");
     console.log("  --host [ip]");
