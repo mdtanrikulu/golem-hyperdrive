@@ -2,13 +2,19 @@ const ip = require('ip');
 const logger = require('./logger').logger;
 
 
-const id = peer => peer.host + ':' + peer.port;
+const toId = peer => peer.host + ':' + peer.port;
+const toObject = entry => ({
+    host: entry.TCP[0],
+    port: parseInt(entry.TCP[1])
+});
 
 const oneShot = func => {
     var result = function() {
-        let f = this.func;
-        this.func = () => {};
-        return f.apply(null, arguments);
+        if (this.func) {
+            let f = this.func;
+            this.func = null;
+            return f.apply(null, arguments);
+        }
     };
 
     result.func = func;
@@ -25,7 +31,7 @@ function PeerConnector(swarm, key, eb) {
     this.dropped = 0;
 
     this.swarm.on('drop', peer => {
-        let exists = this.peers.has(id(peer));
+        let exists = this.peers.has(toId(peer));
         if (exists && ++this.dropped == this.peers.size)
             this.eb('Cannot connect to provided peers');
     });
@@ -33,12 +39,9 @@ function PeerConnector(swarm, key, eb) {
 
 PeerConnector.prototype.connect = function(peers) {
     try {
-        peers = (peers || []).map(p => ({
-            host: p.TCP.address,
-            port: p.TCP.port
-        }));
-
         logger.debug('Connecting to peers', this.key, peers);
+
+        peers = (peers || []).map(toObject);
         peers.forEach(this._validate);
         peers.forEach(this._connect);
     } catch (exc) {
@@ -47,7 +50,7 @@ PeerConnector.prototype.connect = function(peers) {
 };
 
 PeerConnector.prototype._connect = function(peer) {
-    let peerId = id(peer);
+    let peerId = toId(peer);
     if (this.peers.has(peerId))
         return;
 

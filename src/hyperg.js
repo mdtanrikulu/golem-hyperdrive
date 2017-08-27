@@ -165,7 +165,6 @@ HyperG.prototype.download = function(key, destination, peers) {
 
     let downloadSwarm = new Swarm(new SwarmDefaults(options));
     let noDiscovery = Array.isArray(peers) && peers.length > 0;
-    let peerConnector;
 
     return new Promise((cb, peb) => {
         let eb = loggingEb(error => {
@@ -252,6 +251,7 @@ HyperG.prototype.cancel = function(key) {
 
     return new Promise((cb, eb) => {
         eb = loggingEb(eb);
+
         self.swarm.leave(discoveryBuffer);
         self.archiver.remove(discoveryKey, error => {
             if (error) return eb(error);
