@@ -10,7 +10,7 @@ const SwarmDefaults = require('datland-swarm-defaults');
 
 const Archiver = require('./archiver');
 const RPC = require('./rpc');
-const PeerConnector = require('./peers').PeerConnector;
+const PeerConnector = require('./peers');
 
 const common = require('./common');
 const logger = require('./logger').logger;
@@ -208,9 +208,10 @@ HyperG.prototype.download = function(key, destination, peers) {
                              addresses.uTP.address + ':' +
                              addresses.uTP.port);
 
-            if (peerConnector)
+            if (peerConnector) {
+                logger.debug('Connecting to seeds', peers);
                 peerConnector.connect(peers);
-            else {
+            } else {
                 logger.debug('Looking up', key);
                 downloadSwarm.join(archive.discoveryKey);
             }
@@ -287,15 +288,15 @@ HyperG.prototype.closeSwarm = function(swarm) {
 HyperG.prototype.logSwarmEvents = function(swarm, postfix) {
     swarm.on('peer', peer =>
         logger.debug('Peer discovery', postfix,
-                     normalizePeer(peer))
+                     peerInfo(peer))
     );
     swarm.on('drop', peer =>
         logger.debug('Dropping peer', postfix,
-                     normalizePeer(peer))
+                     peerInfo(peer))
     );
     swarm.on('connecting', peer =>
         logger.debug('Connecting to peer', postfix,
-                     normalizePeer(peer))
+                     peerInfo(peer))
     );
     swarm.on('connection', (connection, info) => {
         logger.debug('New connection', postfix, info);
@@ -329,7 +330,7 @@ function loggingEb(eb) {
     };
 }
 
-function normalizePeer(peer) {
+function peerInfo(peer) {
     if (peer && peer.channel)
         return Object.assign({}, peer, {
             channel: peer.channel.toString('hex')

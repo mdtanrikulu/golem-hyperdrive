@@ -69,6 +69,4 @@ PeerConnector.prototype._validate = function(peer) {
 };
 
 
-module.exports = {
-    PeerConnector: PeerConnector
-};
+module.exports = PeerConnector;
