@@ -10,10 +10,10 @@ const SwarmDefaults = require('datland-swarm-defaults');
 
 const Archiver = require('./archiver');
 const RPC = require('./rpc');
+const PeerConnector = require('./peers');
 
 const common = require('./common');
 const logger = require('./logger').logger;
-const winston = require('winston');
 
 /* Unlimited event listeners */
 process.setMaxListeners(0);
@@ -151,11 +151,11 @@ HyperG.prototype.uploadArchive = function(key) {
     });
 };
 
-HyperG.prototype.download = function(key, destination) {
+HyperG.prototype.download = function(key, destination, peers) {
     var self = this;
-    var archive = self.archiver.drive.createArchive(key);
 
-    var options = Object.assign({}, self.swarmOptions, {
+    let archive = self.archiver.drive.createArchive(key);
+    let options = Object.assign({}, self.swarmOptions, {
         id: archive.id || discovery(key),
         stream: peer => archive.replicate({
             download: true,
@@ -163,10 +163,18 @@ HyperG.prototype.download = function(key, destination) {
         })
     });
 
-    var downloadSwarm = new Swarm(new SwarmDefaults(options));
+    let downloadSwarm = new Swarm(new SwarmDefaults(options));
+    let noDiscovery = Array.isArray(peers) && peers.length > 0;
 
-    return new Promise((cb, eb) => {
-        eb = loggingEb(eb);
+    return new Promise((cb, peb) => {
+        let eb = loggingEb(error => {
+            self.cancel(key);
+            peb(error);
+        });
+
+        let peerConnector = noDiscovery
+            ? new PeerConnector(downloadSwarm, key, eb)
+            : null;
 
         const onOpen = error => {
             if (error) return eb(error);
@@ -200,8 +208,14 @@ HyperG.prototype.download = function(key, destination) {
                              addresses.uTP.address + ':' +
                              addresses.uTP.port);
 
-            logger.info("Looking up", key);
-            downloadSwarm.join(archive.discoveryKey);
+            if (peerConnector) {
+                logger.debug('Connecting to seeds', peers);
+                peerConnector.connect(peers);
+            } else {
+                logger.debug('Looking up', key);
+                downloadSwarm.join(archive.discoveryKey);
+            }
+
             archive.open(onOpen);
         });
 
@@ -238,6 +252,7 @@ HyperG.prototype.cancel = function(key) {
 
     return new Promise((cb, eb) => {
         eb = loggingEb(eb);
+
         self.swarm.leave(discoveryBuffer);
         self.archiver.remove(discoveryKey, error => {
             if (error) return eb(error);
@@ -273,15 +288,15 @@ HyperG.prototype.closeSwarm = function(swarm) {
 HyperG.prototype.logSwarmEvents = function(swarm, postfix) {
     swarm.on('peer', peer =>
         logger.debug('Peer discovery', postfix,
-                     normalizePeer(peer))
+                     peerInfo(peer))
     );
     swarm.on('drop', peer =>
         logger.debug('Dropping peer', postfix,
-                     normalizePeer(peer))
+                     peerInfo(peer))
     );
     swarm.on('connecting', peer =>
         logger.debug('Connecting to peer', postfix,
-                     normalizePeer(peer))
+                     peerInfo(peer))
     );
     swarm.on('connection', (connection, info) => {
         logger.debug('New connection', postfix, info);
@@ -315,7 +330,7 @@ function loggingEb(eb) {
     };
 }
 
-function normalizePeer(peer) {
+function peerInfo(peer) {
     if (peer && peer.channel)
         return Object.assign({}, peer, {
             channel: peer.channel.toString('hex')
