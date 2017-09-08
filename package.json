@@ -1,7 +1,7 @@
 {
   "name": "golem-hyperdrive",
   "shortName": "HyperG",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Hyperdrive client for the Golem project",
   "author": {
     "name": "Marek Franciszkiewicz",
@@ -54,7 +54,8 @@
     "rabin": "^1.4.0",
     "rimraf": "2.6.1",
     "uuid": "^3.0.1",
-    "winston": "^2.3.1"
+    "winston": "^2.3.1",
+    "ip": "^1.1.5"
   },
   "devDependencies": {
     "pkg": "3.0.4",

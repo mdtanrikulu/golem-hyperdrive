@@ -37,7 +37,7 @@ RPC.prototype.listen = function() {
         });
         self.server.listen(self.port, self.host);
     });
-}
+};
 
 RPC.prototype._route = function(ctx, request, response) {
     var self = ctx;
@@ -79,16 +79,21 @@ RPC.prototype._route = function(ctx, request, response) {
             }, response, 400);
         }
 
+        logger.debug(request.connection.remoteAddress,
+                     request.connection.remotePort,
+                     '->', json);
+
         try {
             self._commands[json.command](self, json, response);
         } catch(exc) {
-            logger.error(exc);
+            logger.error('Command error:', json.command,
+                         ':', exc);
             return self._respond({
                 error: exc.message
             }, response, 400);
         }
     });
-}
+};
 
 RPC.prototype._commands = {
     id: (self, json, response) => {
@@ -100,13 +105,12 @@ RPC.prototype._commands = {
         assert.ok(json.hash);
         assert.ok(json.dest);
 
-        self.app.download(json.hash, json.dest)
+        self.app.download(json.hash, json.dest, json.peers)
             .then(files => {
                 self._respond({
                     files: files
                 }, response);
             }, error => {
-                logger.error("RPC error [download]", error);
                 self._respond({
                     error: error.message
                 }, response, 400);
@@ -121,10 +125,10 @@ RPC.prototype._commands = {
                     .map(key => {
                         return [key, json.files[key]];
                     });
-            } catch (error) {
-                logger.error("RPC error [upload]", error);
+            } catch (exc) {
+                logger.error("RPC error [upload]", exc);
                 return self._respond({
-                    error: error.message
+                    error: exc.message
                 }, response, 400);
             }
 
@@ -134,9 +138,8 @@ RPC.prototype._commands = {
                     hash: hash
                 }, response);
             }, error => {
-                logger.error("RPC error [upload]", error);
                 self._respond({
-                    error: error.message
+                    error: error
                 }, response, 400);
             });
     },
@@ -149,9 +152,8 @@ RPC.prototype._commands = {
                     hash: hash
                 }, response);
             }, error => {
-                logger.error("RPC error [cancel]", error);
                 self._respond({
-                    error: error.message
+                    error: error
                 }, response, 404);
             });
     },
@@ -161,25 +163,29 @@ RPC.prototype._commands = {
             addresses: addresses
         }, response);
     }
-}
+};
 
 RPC.prototype._validateRequest = function(request) {
     if (request.method.toLowerCase() != 'post')
         throw new Error('Invalid request method');
     if (request.headers['content-type'] != 'application/json')
         throw new Error('Invalid content type');
-}
+};
 
 RPC.prototype._respond = function(data, response, code) {
     var response_data = data
         ? JSON.stringify(data)
         : '';
 
+    logger.debug(response.connection.remoteAddress,
+                 response.connection.remotePort,
+                 '<-', data);
+
     response.statusCode = code || 200;
     response.setHeader('Content-Type', 'application/json');
     response.setHeader('Content-Length', Buffer.byteLength(response_data));
     response.write(response_data);
     response.end();
-}
+};
 
 module.exports = RPC;

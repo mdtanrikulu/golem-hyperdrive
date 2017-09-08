@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-
+const fs = require('fs');
 const http = require('http');
 const minimist = require('minimist');
 const path = require('path');
@@ -26,7 +26,8 @@ function download(options) {
     request({
         command: 'download',
         hash: options.d || options.download,
-        dest: options._[0]
+        dest: options._[0],
+        peers: JSON.parse(fs.readFileSync(options._[1], 'utf8')).peers
     }, options);
 }
 
@@ -37,10 +38,9 @@ function upload(options) {
 
     if (options._.length > 0)
         input_files = input_files.concat(options._);
-    console.log("input_files", input_files);
 
     for (var file of input_files)
-        files[file] = path.basename(file)
+        files[file] = path.basename(file);
 
     request({
         command: 'upload',
@@ -66,20 +66,22 @@ function version() {
 }
 
 function usage(code) {
-    console.log(common.application + " usage:");
-    console.log("\t1) -d --download [hash] [dst_dir]");
-    console.log("       Download an archive with [hash] to [dst_dir]");
-    console.log("\t2) -u --upload [file_1] [file_2] ...");
-    console.log("       Create and share an archive with given files");
-    console.log("\t3) -c --cancel [hash]");
-    console.log("       Stop sharing an archive identified by [hash]");
-    console.log("\t4) -a --addresses");
-    console.log("       Display listening addresses");
-    console.log("\t5) -v --version");
-    console.log("       Display version information");
-    console.log("\nadditional options:");
-    console.log("\t --host  daemon IP address");
-    console.log("\t --port  daemon port");
+    let s = "\t\t\t\t";
+    console.log(common.application + " usage:", "\n");
+    console.log("  -d --download [hash] [dst_dir]");
+    console.log(s, "Download an archive with [hash] to [dst_dir]");
+    console.log("  -u --upload [file_1] [file_2] ...");
+    console.log(s, "Create and share an archive with given files");
+    console.log("  -c --cancel [hash]");
+    console.log(s, "Stop sharing an archive identified by [hash]");
+    console.log("  -a --addresses");
+    console.log(s, "Display listening addresses");
+    console.log("  -v --version");
+    console.log(s, "Display version information");
+    console.log("  --host");
+    console.log(s, "RPC IP address");
+    console.log("  --port");
+    console.log(s, "RPC port", "\n");
     process.exit(code);
 }
 
