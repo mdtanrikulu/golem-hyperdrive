@@ -140,10 +140,12 @@ Entries.save = function(archive, destination, cb) {
 
             const dest = paths[entry.name];
 
-            if (Entries.exists(archive, entry, dest)) {
-                if (left) return next();
-                return cb(ERR_NONE, files);
-            }
+            if (Entries.exists(archive, entry, dest))
+                try {
+                    fs.unlinkSync(dest);
+                } catch(error) {
+                    logger.error('Cannot remove', dest);
+                }
 
             logger.debug('Saving', entry.name, '->', dest);
 
