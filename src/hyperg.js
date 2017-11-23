@@ -15,6 +15,11 @@ const PeerConnector = require('./peers');
 const common = require('./common');
 const logger = require('./logger').logger;
 
+/* Constants */
+const SHARE_DOWNLOADS = false;
+const SWEEP_INTERVAL = 3600 * 1000; // 1 hour in ms
+const SWEEP_LIFETIME = 3600 * 24 * 3 * 1000; // 3 days in ms
+
 /* Unlimited event listeners */
 process.setMaxListeners(0);
 /* Log SIGPIPE errors */
@@ -25,12 +30,17 @@ process.on('SIGPIPE', () =>
 function HyperG(options) {
     var self = this;
 
+    logger.info(common.application,
+                '[' + common.version + ']');
+
     self.options = Object.assign({
         host: '0.0.0.0',
         port: 3282,
         rpc_host: 'localhost',
         rpc_port: 3292,
-        db: './' + common.application + '.db'
+        db: './' + common.application + '.db',
+        sweep_interval: SWEEP_INTERVAL,
+        share_downloads: Boolean(SHARE_DOWNLOADS)
     }, options);
 
     self.archiver = new Archiver(self.options);
@@ -50,8 +60,8 @@ function HyperG(options) {
         })
     ));
 
-    self.networks = [];
     self.running = false;
+    self.sweepJob = null;
 }
 
 HyperG.exit = function(message, code) {
@@ -59,6 +69,7 @@ HyperG.exit = function(message, code) {
         code = code || 1;
         logger.error(message);
     }
+
     process.exit(code);
 };
 
@@ -72,15 +83,16 @@ HyperG.prototype.run = function() {
     if (self.running) return;
     self.running = true;
 
+    self.sweep();
+    self.sweepJob = setInterval(() => self.sweep(),
+                                self.options.sweep_interval);
+
     self.swarm.once('error', HyperG.exit);
     self.swarm.once('listening', () =>
         self.rpc.listen(self.options.rpc_port,
                         self.options.rpc_host)
             .then(() => {
                 var addresses = self.addresses(self.swarm);
-
-                logger.info(common.application,
-                            '[' + common.version + ']');
 
                 if ('TCP' in addresses)
                     logger.info('TCP listening on',
@@ -122,6 +134,7 @@ HyperG.prototype.uploadFiles = function(files) {
                 if (error) return eb(error);
 
                 const key = archive.key.toString('hex');
+                self.archiver.addTimestamp(key);
                 self.swarm.join(archive.discoveryKey);
 
                 logger.info('Sharing', key);
@@ -154,12 +167,13 @@ HyperG.prototype.uploadArchive = function(key) {
 HyperG.prototype.download = function(key, destination, peers) {
     var self = this;
 
+    let sharing = self.options.share_downloads;
     let archive = self.archiver.drive.createArchive(key);
     let options = Object.assign({}, self.swarmOptions, {
         id: archive.id || discovery(key),
         stream: peer => archive.replicate({
             download: true,
-            upload: false
+            upload: sharing
         })
     });
 
@@ -192,6 +206,11 @@ HyperG.prototype.download = function(key, destination, peers) {
                     logger.debug('Closing swarm', key);
                     self.closeSwarm(downloadSwarm);
                 });
+
+                if (sharing) {
+                    self.archiver.addTimestamp(key);
+                    self.swarm.join(archive.discoveryKey);
+                }
             });
         };
 
@@ -254,11 +273,32 @@ HyperG.prototype.cancel = function(key) {
         eb = loggingEb(eb);
 
         self.swarm.leave(discoveryBuffer);
+        self.archiver.removeTimestamp(key);
         self.archiver.remove(discoveryKey, error => {
             if (error) return eb(error);
-            logger.info("Canceling", key);
+            logger.info("Cancelling", key);
             cb(key);
         });
+    });
+};
+
+HyperG.prototype.sweep = function() {
+    let self = this;
+    let now = new Date().getTime();
+
+    logger.debug('Sweeping feeds older than', SWEEP_LIFETIME / 3600, 's');
+
+    self.archiver.timestamps.createReadStream({
+        keys: true,
+        values: true
+    }).on('data', data => {
+        try {
+            let deadline = parseInt(data.value) + SWEEP_LIFETIME;
+            if (deadline < now)
+                self.cancel(data.key.toString('hex'));
+        } catch (err) {
+            logger.debug('Sweep: error parsing db entry:', err)
+        }
     });
 };
 

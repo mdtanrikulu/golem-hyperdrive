@@ -3,6 +3,7 @@ const hash = require('hypercore/lib/hash');
 const mkdirp = require('mkdirp');
 const path = require('path');
 const pump = require('pump');
+const subleveldown = require('subleveldown');
 
 const Feed = require('hypercore/lib/feed');
 const Hyperdrive = require('hyperdrive');
@@ -29,6 +30,13 @@ function Archiver(options, streamOptions) {
 
     this.db = Level(options.db);
     this.drive = Hyperdrive(this.db);
+    this.timestamps = subleveldown(
+        this.db, 'timestamps',
+        {
+            keyEncoding: 'ascii',
+            valueEncoding: 'ascii'
+        }
+    );
 
     this.options = options;
     this.streamOptions = Object.assign({
@@ -99,6 +107,17 @@ Archiver.prototype.createFeed = function(feedInfo) {
 Archiver.prototype.copyArchive = function(archive, destination, cb) {
     Entries.save(archive, destination, cb);
 };
+
+Archiver.prototype.addTimestamp = function(key) {
+    let now = new Date().getTime();
+    this.timestamps.put(key, String(now));
+};
+
+Archiver.prototype.removeTimestamp = function(key) {
+    this.timestamps.del(key, err => {
+        if (err) logger.error('Error removing timestamp for', key);
+    });
+}
 
 
 function Entries() {}
