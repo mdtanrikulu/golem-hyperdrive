@@ -80,7 +80,7 @@ Archiver.prototype.replicate = function(peer) {
     stream.on('open', discoveryBuffer => {
         var discoveryKey = discoveryBuffer.toString('hex');
 
-        logger.debug('Archive requested', discoveryKey, peer);
+        logger.debug('Feed requested', discoveryKey, peer);
 
         self.stat(discoveryKey, (error, feedInfo) => {
             if (error)

@@ -50,12 +50,16 @@ PeerConnector.prototype.connect = function(peers) {
 };
 
 PeerConnector.prototype._connect = function(peer) {
-    let peerId = toId(peer);
-    if (this.peers.has(peerId))
+    let id = toId(peer);
+    if (this.peers.has(id))
         return;
 
-    this.peers.add(peerId);
-    this.swarm._discovery.emit('peer', this.channel, peer, 'dht');
+    peer.id = id;
+    peer.retries = 0;
+    peer.channel = this.channel;
+
+    this.peers.add(id);
+    this.swarm.addPeer(new Buffer(this.channel, 'hex'), peer);
 };
 
 

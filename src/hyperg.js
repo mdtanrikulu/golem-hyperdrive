@@ -167,10 +167,12 @@ HyperG.prototype.uploadArchive = function(key) {
 HyperG.prototype.download = function(key, destination, peers) {
     var self = this;
 
+    let noDiscovery = Array.isArray(peers) && peers.length > 0;
     let sharing = self.options.share_downloads;
     let archive = self.archiver.drive.createArchive(key);
     let options = Object.assign({}, self.swarmOptions, {
         id: archive.id || discovery(key),
+        discovery: !noDiscovery,
         stream: peer => archive.replicate({
             download: true,
             upload: sharing
@@ -178,7 +180,6 @@ HyperG.prototype.download = function(key, destination, peers) {
     });
 
     let downloadSwarm = new Swarm(new SwarmDefaults(options));
-    let noDiscovery = Array.isArray(peers) && peers.length > 0;
 
     return new Promise((cb, peb) => {
         let eb = loggingEb(error => {
@@ -213,6 +214,11 @@ HyperG.prototype.download = function(key, destination, peers) {
                 }
             });
         };
+
+        // `discovery-swarm` requeues a peer when its connection
+        // closes, causing an infinite connection loop.
+        if (noDiscovery)
+            downloadSwarm._requeue = () => {};
 
         downloadSwarm.once('error', eb);
         downloadSwarm.once('listening', () => {
