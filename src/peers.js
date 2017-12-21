@@ -4,19 +4,20 @@ const logger = require('./logger').logger;
 
 const toObject = entry => ({
     host: entry.TCP[0],
-    port: parseInt(entry.TCP[1])
+    port: parseInt(entry.TCP[1]) || null
 });
 
 const toId = peer => peer.host + ':' + peer.port;
 
-const validate = peer => {
+const filter = peer => {
     let host = peer.host;
     let port = peer.port;
 
     if (!ip.isV4Format(host) && !ip.isV6Format(host))
-        throw new Error('Invalid address:', host);
+        return false;
     if (port < 1 || port > 65535)
-        throw new Error('Invalid port:', port);
+        return false;
+    return true;
 }
 
 
@@ -27,7 +28,7 @@ function PeerConnector(swarm, key, eb) {
     this.dropped = 0;
 
     this.eb = error => {
-        this.eb = logger.error;
+        logger.error(error);
         eb(error);
     };
 
@@ -40,11 +41,16 @@ function PeerConnector(swarm, key, eb) {
 
 PeerConnector.prototype.connect = function(peers) {
     try {
-        logger.debug('Connecting to peers', this.channel, peers);
-        peers = (peers || []).map(toObject);
-        peers.forEach(validate);
-        peers.forEach(peer => this._connect(peer));
+        let converted = (peers || []).map(toObject);
+        let filtered = converted.filter(filter);
+
+        if (!filtered || filtered.length == 0)
+            throw new Error("Invalid peers: " + JSON.stringify(peers));
+
+        logger.info('Connecting to peers', this.channel, filtered);
+        filtered.forEach(peer => this._connect(peer));
     } catch (exc) {
+        exc.message = exc.message || exc.name || String(exc);
         this.eb(exc.message);
     }
 };
