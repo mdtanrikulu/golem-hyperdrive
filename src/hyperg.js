@@ -152,10 +152,10 @@ HyperG.prototype.uploadArchive = function(key) {
     const discoveryKey = discoveryBuffer.toString('hex');
 
     return new Promise((cb, eb) => {
-        eb = loggingEb(eb);
+        eb = loggingEb(eb, true);
 
         self.archiver.stat(discoveryKey, error => {
-            if (error) return eb(error);
+            if (error) return eb(String(error));
 
             logger.info("Sharing (cached)", key);
             self.swarm.join(discoveryKey);
@@ -369,10 +369,11 @@ function discovery(value) {
     return hash.discoveryKey(buffer(value));
 }
 
-function loggingEb(eb) {
-    return error => {
-        logger.error(error);
-        eb(error);
+function loggingEb(eb, warn) {
+    return msg => {
+        if (warn) logger.warn(msg);
+        else logger.error(msg);
+        eb(msg);
     };
 }
 
