@@ -291,6 +291,7 @@ HyperG.prototype.cancel = function(key) {
 HyperG.prototype.sweep = function() {
     let self = this;
     let now = new Date().getTime();
+    let keys = [];
 
     logger.debug('Sweeping feeds older than', SWEEP_LIFETIME / 3600, 's');
 
@@ -300,11 +301,18 @@ HyperG.prototype.sweep = function() {
     }).on('data', data => {
         try {
             let deadline = parseInt(data.value) + SWEEP_LIFETIME;
-            if (deadline < now)
-                self.cancel(data.key.toString('hex'));
+            if (deadline < now) {
+                keys.push(data.key.toString('hex'));
+            }
         } catch (err) {
             logger.debug('Sweep: error parsing db entry:', err)
         }
+    }).on('close', () => {
+        let loop = () => {
+            if (!keys.length) return;
+            self.cancel(keys.shift())
+                .then(loop);
+        }; loop();
     });
 };
 

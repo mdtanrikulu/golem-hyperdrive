@@ -4,6 +4,7 @@ const mkdirp = require('mkdirp');
 const path = require('path');
 const pump = require('pump');
 const subleveldown = require('subleveldown');
+const util = require('util');
 
 const Feed = require('hypercore/lib/feed');
 const Hyperdrive = require('hyperdrive');
@@ -64,11 +65,62 @@ Archiver.prototype.create = function(files, cb) {
 };
 
 Archiver.prototype.remove = function(discoveryKey, cb) {
-    var core = this.drive.core;
-    core._feeds.del(discoveryKey, error => {
-        cb(error, discoveryKey);
+    var self = this;
+    let core = self.drive.core;
+    let formats = [
+        '!signatures!!%s!',
+        '!bitfields!!%s!',
+        '!nodes!!%s!',
+        '!feeds!!%s!',
+        '!data!!%s!'
+    ];
+
+    self.stat(discoveryKey, (error, feedInfo) => {
+        if (error) return cb(error, discoveryKey);
+
+        let archive = self.drive.createArchive(discoveryKey, feedInfo)
+        archive.open(error => {
+
+            let metadata_prefix = (archive.metadata.prefix || '')
+                .toString('hex');
+            let content_prefix = (archive.content.prefix || '')
+                .toString('hex');
+
+            let loop = () => {
+                if (!formats.length)
+                    return cb(null, discoveryKey);
+
+                let format = formats.shift();
+                let metadata_key = util.format(format, metadata_prefix);
+                let content_key = util.format(format, content_prefix);
+
+                self._remove_prefix(
+                    metadata_key,
+                    core._db,
+                    () => self._remove_prefix(content_key, core._db, loop)
+                );
+            }; loop();
+        });
     });
 };
+
+Archiver.prototype._remove_prefix = function(prefix, db, cb) {
+    db.createKeyStream({
+        gte: prefix,
+        lt: prefix + '~',
+        keyEncoding: 'utf8',
+    })
+    .on('data', key => {
+        db.del(key, error => {
+            if (error)
+                logger.debug(`Error removing ${prefix}: ${error}`);
+        });
+    })
+    .on('close', () => {
+        logger.debug(`Prefix ${prefix} removed`);
+        cb();
+    });
+}
 
 Archiver.prototype.replicate = function(peer) {
     var self = this;
