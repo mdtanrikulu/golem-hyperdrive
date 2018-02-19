@@ -1,5 +1,6 @@
 const http = require('http');
 const assert = require('assert');
+const common = require('./common');
 
 const logger = require('./logger').logger;
 
@@ -98,21 +99,40 @@ RPC.prototype._route = function(ctx, request, response) {
 RPC.prototype._commands = {
     id: (self, json, response) => {
         self._respond({
-            id: self.app.id()
+            id: self.app.id(),
+            version: common.version,
         }, response);
     },
     download: (self, json, response) => {
-        assert.ok(json.hash);
-        assert.ok(json.dest);
 
-        self.app.download(json.hash, json.dest, json.peers)
+        function gt0(src) {
+            let value = parseInt(src);
+            if (value <= 0)
+                throw new Error('Invalid value: ' + src);
+            return value;
+        }
+
+        try {
+            assert.ok(json.hash);
+            assert.ok(json.dest);
+            json.size = json.size ? gt0(json.size) : null;
+            json.timeout = json.timeout ? gt0(json.timeout) * 1000 : null;
+        } catch (exc) {
+            logger.error("RPC error [download]", exc);
+            return self._respond({
+                error: exc.message
+            }, response, 400);
+        }
+
+        self.app.download(json.hash, json.dest, json.peers,
+                          json.size, json.timeout)
             .then(files => {
                 self._respond({
                     files: files
                 }, response);
             }, error => {
                 self._respond({
-                    error: error.message
+                    error: error.message || error
                 }, response, 400);
             });
     },

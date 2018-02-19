@@ -164,7 +164,8 @@ HyperG.prototype.uploadArchive = function(key) {
     });
 };
 
-HyperG.prototype.download = function(key, destination, peers) {
+HyperG.prototype.download = function(key, destination, peers,
+                                     size, timeout) {
     var self = this;
 
     let noDiscovery = Array.isArray(peers) && peers.length > 0;
@@ -180,19 +181,46 @@ HyperG.prototype.download = function(key, destination, peers) {
     });
 
     let downloadSwarm = new Swarm(new SwarmDefaults(options));
+    let downloadTimeout = null;
 
-    return new Promise((cb, peb) => {
-        let eb = loggingEb(error => {
-            self.cancel(key);
+    const cleanupSwarm = () => {
+        downloadSwarm.leave(archive.discoveryKey);
+        archive.close(() => {
+            logger.debug('Closing swarm', key);
+            self.closeSwarm(downloadSwarm);
+        });
+    };
+    const cleanupTimeout = () => {
+        if (!downloadTimeout) return;
+        clearTimeout(downloadTimeout);
+        downloadTimeout = null;
+    };
+
+    return new Promise((pcb, peb) => {
+        const cb = files => {
+            cleanupTimeout(); cleanupSwarm();
+            pcb(files);
+        };
+        const eb = loggingEb(error => {
+            cleanupTimeout(); cleanupSwarm();
             peb(error);
         });
 
         let peerConnector = noDiscovery
             ? new PeerConnector(downloadSwarm, key, eb)
             : null;
+        downloadTimeout = timeout
+            ? setTimeout(eb, timeout, `${key} download ` +
+                         `timed out after ${timeout} s`)
+            : null;
 
         const onOpen = error => {
             if (error) return eb(error);
+            if (size && archive.content.bytes > size) {
+                error = new Error(`Archive ${key} exceeds the ` +
+                                  `maximum size of ${size} bytes`)
+                return eb(error);
+            }
 
             logger.debug('Saving files', key);
             self.archiver.copyArchive(archive, destination,
@@ -201,12 +229,6 @@ HyperG.prototype.download = function(key, destination, peers) {
 
                 logger.info('Downloaded', key);
                 cb(files);
-
-                downloadSwarm.leave(archive.discoveryKey);
-                archive.close(() => {
-                    logger.debug('Closing swarm', key);
-                    self.closeSwarm(downloadSwarm);
-                });
 
                 if (sharing) {
                     self.archiver.addTimestamp(key);
