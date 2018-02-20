@@ -80,6 +80,7 @@ Archiver.prototype.remove = function(discoveryKey, cb) {
 
         let archive = self.drive.createArchive(discoveryKey, feedInfo)
         archive.open(error => {
+            if (error) return cb(error, discoveryKey);
 
             let metadata_prefix = (archive.metadata.prefix || '')
                 .toString('hex');
@@ -87,8 +88,7 @@ Archiver.prototype.remove = function(discoveryKey, cb) {
                 .toString('hex');
 
             let loop = () => {
-                if (!formats.length)
-                    return cb(null, discoveryKey);
+                if (!formats.length) return cb(null, discoveryKey);
 
                 let format = formats.shift();
                 let metadata_key = util.format(format, metadata_prefix);
@@ -118,7 +118,7 @@ Archiver.prototype._remove_prefix = function(prefix, db, cb) {
     })
     .on('close', () => {
         logger.debug(`Prefix ${prefix} removed`);
-        cb();
+        setTimeout(cb, 0);
     });
 }
 

@@ -87,8 +87,8 @@ RPC.prototype._route = function(ctx, request, response) {
         try {
             self._commands[json.command](self, json, response);
         } catch(exc) {
-            logger.error('Command error:', json.command,
-                         ':', exc);
+            logger.error(`Command error: ${json.command}:`,
+                         exc);
             return self._respond({
                 error: exc.message
             }, response, 400);

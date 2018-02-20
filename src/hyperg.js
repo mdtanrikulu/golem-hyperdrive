@@ -304,7 +304,7 @@ HyperG.prototype.cancel = function(key) {
         self.archiver.removeTimestamp(key);
         self.archiver.remove(discoveryKey, error => {
             if (error) return eb(error);
-            logger.info("Cancelling", key);
+            logger.info("Removing", key);
             cb(key);
         });
     });
