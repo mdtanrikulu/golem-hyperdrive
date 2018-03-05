@@ -40,18 +40,8 @@ if (options.v || options.version)
 if (options.h || options.help)
     return usage();
 
-if (options.logfile) {
-    logger.info('Opening HyperG log file:', options.logfile);
-    logger.add(
-        winston.transports.File,
-        {
-            filename: options.logfile,
-            json: false,
-            timestamp: logger_module.timestamp,
-            formatter: logger_module.formatter
-        }
-    );
-}
+if (options.logfile)
+    logger_module.addFileTransport(options.logfile);
 if (options.loglevel)
     logger_module.setLevel(options.loglevel);
 
