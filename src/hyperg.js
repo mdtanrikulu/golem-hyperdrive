@@ -62,6 +62,7 @@ function HyperG(options) {
 
     self.running = false;
     self.sweepJob = null;
+    self.shareTimeouts = {};
 }
 
 HyperG.exit = function(message, code) {
@@ -115,13 +116,13 @@ HyperG.prototype.run = function() {
     });
 };
 
-HyperG.prototype.upload = function(id, files, discoveryKey) {
+HyperG.prototype.upload = function(files, discoveryKey, timeout) {
     if (discoveryKey)
-        return this.uploadArchive(discoveryKey);
-    return this.uploadFiles(files);
+        return this.uploadArchive(discoveryKey, timeout);
+    return this.uploadFiles(files, timeout);
 };
 
-HyperG.prototype.uploadFiles = function(files) {
+HyperG.prototype.uploadFiles = function(files, timeout) {
     var self = this;
 
     return new Promise((cb, eb) => {
@@ -138,6 +139,7 @@ HyperG.prototype.uploadFiles = function(files) {
                 self.swarm.join(archive.discoveryKey);
 
                 logger.info('Sharing', key);
+                self._setShareTimeout(timeout);
                 cb(key);
             });
 
@@ -145,7 +147,7 @@ HyperG.prototype.uploadFiles = function(files) {
     });
 };
 
-HyperG.prototype.uploadArchive = function(key) {
+HyperG.prototype.uploadArchive = function(key, timeout) {
     var self = this;
 
     const discoveryBuffer = discovery(key);
@@ -159,10 +161,20 @@ HyperG.prototype.uploadArchive = function(key) {
 
             logger.info("Sharing (cached)", key);
             self.swarm.join(discoveryKey);
+            self._setShareTimeout(timeout);
             cb(key);
         });
     });
 };
+
+HyperG.prototype._setShareTimeout = function(key, timeout) {
+    if (!timeout) return;
+    const timeMargin = 5000;
+
+    if (this.shareTimeouts[key])
+        clearTimeout(this.shareTimeouts[key]);
+    setTimeout(this.cancel, timeout + timeMargin, key);
+}
 
 HyperG.prototype.download = function(key, destination, peers,
                                      size, timeout) {

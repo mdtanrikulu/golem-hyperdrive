@@ -152,7 +152,16 @@ RPC.prototype._commands = {
                 }, response, 400);
             }
 
-        self.app.upload(json.id, json.files, json.hash)
+        try {
+            json.timeout = json.timeout ? gt0(json.timeout) * 1000 : null;
+        } catch (exc) {
+            logger.error("RPC error [upload]", exc);
+            return self._respond({
+                error: exc.message
+            }, response, 400);
+        }
+
+        self.app.upload(json.files, json.hash, json.timeout)
             .then(hash => {
                 self._respond({
                     hash: hash
