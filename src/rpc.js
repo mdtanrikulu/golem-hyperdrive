@@ -105,13 +105,6 @@ RPC.prototype._commands = {
     },
     download: (self, json, response) => {
 
-        function gt0(src) {
-            let value = parseInt(src);
-            if (value <= 0)
-                throw new Error('Invalid value: ' + src);
-            return value;
-        }
-
         try {
             assert.ok(json.hash);
             assert.ok(json.dest);
@@ -216,5 +209,13 @@ RPC.prototype._respond = function(data, response, code) {
     response.write(response_data);
     response.end();
 };
+
+
+function gt0(src) {
+    let value = parseInt(src);
+    if (value <= 0)
+        throw new Error('Invalid value: ' + src);
+    return value;
+}
 
 module.exports = RPC;
