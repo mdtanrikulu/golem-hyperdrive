@@ -24,7 +24,7 @@ const SWEEP_LIFETIME = 3600 * 24 * 3 * 1000; // 3 days in ms
 process.setMaxListeners(0);
 /* Log SIGPIPE errors */
 process.on('SIGPIPE', () =>
-    logger.error("broken pipe"));
+    logger.debug("broken pipe"));
 
 
 function HyperG(options) {
