@@ -105,13 +105,6 @@ RPC.prototype._commands = {
     },
     download: (self, json, response) => {
 
-        function gt0(src) {
-            let value = parseInt(src);
-            if (value <= 0)
-                throw new Error('Invalid value: ' + src);
-            return value;
-        }
-
         try {
             assert.ok(json.hash);
             assert.ok(json.dest);
@@ -152,7 +145,16 @@ RPC.prototype._commands = {
                 }, response, 400);
             }
 
-        self.app.upload(json.id, json.files, json.hash)
+        try {
+            json.timeout = json.timeout ? gt0(json.timeout) * 1000 : null;
+        } catch (exc) {
+            logger.error("RPC error [upload]", exc);
+            return self._respond({
+                error: exc.message
+            }, response, 400);
+        }
+
+        self.app.upload(json.files, json.hash, json.timeout)
             .then(hash => {
                 self._respond({
                     hash: hash
@@ -207,5 +209,13 @@ RPC.prototype._respond = function(data, response, code) {
     response.write(response_data);
     response.end();
 };
+
+
+function gt0(src) {
+    let value = parseInt(src);
+    if (value <= 0)
+        throw new Error('Invalid value: ' + src);
+    return value;
+}
 
 module.exports = RPC;
