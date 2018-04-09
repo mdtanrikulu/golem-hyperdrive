@@ -17,7 +17,7 @@ const logger = require('./logger').logger;
 
 /* Constants */
 const SHARE_DOWNLOADS = false;
-const SWEEP_INTERVAL = 3600 * 1000; // 1 hour in ms
+const SWEEP_INTERVAL = 1800 * 1000; // 30 mins in ms
 const SWEEP_LIFETIME = 3600 * 24 * 3 * 1000; // 3 days in ms
 
 /* Unlimited event listeners */
@@ -40,8 +40,11 @@ function HyperG(options) {
         rpc_port: 3292,
         db: './' + common.application + '.db',
         sweep_interval: SWEEP_INTERVAL,
+        sweep_lifetime: SWEEP_LIFETIME,
         share_downloads: Boolean(SHARE_DOWNLOADS)
     }, options);
+
+    logger.debug('Configuration', self.options);
 
     self.archiver = new Archiver(self.options);
     self.rpc = new RPC(self, self.options.rpc_port,
@@ -314,15 +317,16 @@ HyperG.prototype.sweep = function() {
     let self = this;
     let now = new Date().getTime();
     let keys = [];
+    let lifetime = self.options.sweep_lifetime;
 
-    logger.debug('Sweeping feeds older than', SWEEP_LIFETIME / 3600, 's');
+    logger.debug('Sweeping feeds older than', lifetime / 1000, 's');
 
     self.archiver.timestamps.createReadStream({
         keys: true,
         values: true
     }).on('data', data => {
         try {
-            let deadline = parseInt(data.value) + SWEEP_LIFETIME;
+            let deadline = parseInt(data.value) + lifetime;
             if (deadline < now) {
                 keys.push(data.key.toString('hex'));
             }

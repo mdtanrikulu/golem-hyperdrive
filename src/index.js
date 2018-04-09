@@ -25,6 +25,8 @@ function usage() {
     console.log(s, "IP address for RPC to listen on");
     console.log("  --rpc_port [int]");
     console.log(s, "TCP port for RPC to listen on");
+    console.log("  --sweep_lifetime [int]");
+    console.log(s, "Database lifetime of shares in seconds");
     console.log("  --logfile [path]");
     console.log(s, "Log to file");
     console.log("  --loglevel [error|warn|info|verbose|debug]");
@@ -39,6 +41,11 @@ if (options.v || options.version)
     return console.log(common.version);
 if (options.h || options.help)
     return usage();
+
+if (options.sweep_lifetime) {
+    let lifetime = parseInt(options.sweep_lifetime);
+    options.sweep_lifetime = Math.max(lifetime, 0) * 1000;
+}
 
 if (options.logfile)
     logger_module.addFileTransport(options.logfile);
