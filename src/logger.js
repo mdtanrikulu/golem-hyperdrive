@@ -8,7 +8,7 @@ var timestamp = () => {
     var date = new Date();
     // 2017-06-07 15:52:55.123
     return date.getFullYear() + '-' +
-           twoDigits(date.getMonth()) + '-' +
+           twoDigits(date.getMonth() + 1) + '-' +
            twoDigits(date.getDate()) + ' ' +
            twoDigits(date.getHours())   + ':' +
            twoDigits(date.getMinutes()) + ':' +
