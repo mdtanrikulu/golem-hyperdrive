@@ -226,7 +226,7 @@ HyperG.prototype.download = function(key, destination, peers,
             : null;
         downloadTimeout = timeout
             ? setTimeout(eb, timeout, `${key} download ` +
-                         `timed out after ${timeout} s`)
+                         `timed out after ${timeout / 1000.0} s`)
             : null;
 
         const onOpen = error => {
