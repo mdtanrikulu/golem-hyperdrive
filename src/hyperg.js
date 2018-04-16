@@ -142,7 +142,7 @@ HyperG.prototype.uploadFiles = function(files, timeout) {
                 self.swarm.join(archive.discoveryKey);
 
                 logger.info('Sharing', key);
-                self._setShareTimeout(timeout);
+                self._setShareTimeout(key, timeout);
                 cb(key);
             });
 
@@ -164,19 +164,23 @@ HyperG.prototype.uploadArchive = function(key, timeout) {
 
             logger.info("Sharing (cached)", key);
             self.swarm.join(discoveryKey);
-            self._setShareTimeout(timeout);
+            self._setShareTimeout(key, timeout);
             cb(key);
         });
     });
 };
 
 HyperG.prototype._setShareTimeout = function(key, timeout) {
+    var self = this;
+
     if (!timeout) return;
     const timeMargin = 5000;
 
     if (this.shareTimeouts[key])
         clearTimeout(this.shareTimeouts[key]);
-    setTimeout(this.cancel, timeout + timeMargin, key);
+
+    logger.debug(`${key} timeout: ${timeout + timeMargin}`);
+    setTimeout(() => self.cancel(key), timeout + timeMargin);
 }
 
 HyperG.prototype.download = function(key, destination, peers,
