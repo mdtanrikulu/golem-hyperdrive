@@ -17,6 +17,8 @@ var options = minimist(
 function usage() {
     let s = "\t\t\t\t";
     console.log(common.application + " usage:", "\n");
+    console.log("  --db [path]");
+    console.log(s, "Database path");
     console.log("  --host [ip]");
     console.log(s, "IP address to listen on");
     console.log("  --port [int]");
@@ -25,6 +27,8 @@ function usage() {
     console.log(s, "IP address for RPC to listen on");
     console.log("  --rpc_port [int]");
     console.log(s, "TCP port for RPC to listen on");
+    console.log("  --sweep_interval [int]");
+    console.log(s, "Database sweep interval in seconds");
     console.log("  --sweep_lifetime [int]");
     console.log(s, "Database lifetime of shares in seconds");
     console.log("  --logfile [path]");
