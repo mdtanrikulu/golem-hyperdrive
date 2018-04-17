@@ -26,7 +26,8 @@
     "assets": "./node_modules/hyperdrive-encoding/schema.proto"
   },
   "scripts": {
-    "start": "node --max-old-space-size=3072 src/index.js",
+    "start": "node --expose-gc --max-old-space-size=3072 src/index.js",
+    "start:debug": "node --expose-gc --max-old-space-size=3072 src/index.js --loglevel debug",
     "archive": "node build.js archive",
     "build": "node build.js build",
     "clean": "node build.js clean",

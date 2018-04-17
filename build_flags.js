@@ -1,4 +1,4 @@
 module.exports = [
     '--options',
-    'max-old-space-size=3072'
+    'expose-gc,max-old-space-size=3072'
 ]

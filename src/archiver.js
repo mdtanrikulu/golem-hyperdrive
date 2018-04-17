@@ -136,7 +136,8 @@ Archiver.prototype.replicate = function(peer) {
 
         self.stat(discoveryKey, (error, feedInfo) => {
             if (error)
-                return logger.debug('Upload error:', error);
+                return logger.debug('Replication error:',
+                                    JSON.stringify(error));
 
             var feed = self.createFeed(feedInfo);
             logger.debug("Uploading", feed.key.toString('hex'));

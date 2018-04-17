@@ -11,6 +11,7 @@ const SwarmDefaults = require('datland-swarm-defaults');
 const Archiver = require('./archiver');
 const RPC = require('./rpc');
 const PeerConnector = require('./peers');
+const GCJob = require('./memory').GCJob;
 
 const common = require('./common');
 const logger = require('./logger').logger;
@@ -65,6 +66,7 @@ function HyperG(options) {
 
     self.running = false;
     self.sweepJob = null;
+    self.gcJob = null;
     self.shareTimeouts = {};
 }
 
@@ -90,6 +92,9 @@ HyperG.prototype.run = function() {
     self.sweep();
     self.sweepJob = setInterval(() => self.sweep(),
                                 self.options.sweep_interval);
+
+    self.gcJob = new GCJob();
+    self.gcJob.start();
 
     self.swarm.once('error', HyperG.exit);
     self.swarm.once('listening', () =>
