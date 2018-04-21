@@ -8,7 +8,7 @@ var timestamp = () => {
     var date = new Date();
     // 2017-06-07 15:52:55.123
     return date.getFullYear() + '-' +
-           twoDigits(date.getMonth()) + '-' +
+           twoDigits(date.getMonth() + 1) + '-' +
            twoDigits(date.getDate()) + ' ' +
            twoDigits(date.getHours())   + ':' +
            twoDigits(date.getMinutes()) + ':' +
@@ -32,8 +32,23 @@ var logger = new winston.Logger({
             timestamp: timestamp,
             formatter: formatter
         })
-    ]
+    ],
+    exitOnError: false
 });
+
+function addFileTransport(file) {
+    logger.info('Opening HyperG log file:', file);
+    logger.add(
+        winston.transports.File,
+        {
+            filename: file,
+            json: false,
+            timestamp: timestamp,
+            formatter: formatter,
+            handleExceptions: true
+        }
+    );
+}
 
 function setLevel(level) {
     for (let transportName in logger.transports)
@@ -43,6 +58,7 @@ function setLevel(level) {
 module.exports = {
     'logger': logger,
     'setLevel': setLevel,
+    'addFileTransport': addFileTransport,
     'timestamp': timestamp,
     'formatter': formatter
 };

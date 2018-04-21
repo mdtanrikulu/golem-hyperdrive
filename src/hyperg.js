@@ -11,27 +11,41 @@ const SwarmDefaults = require('datland-swarm-defaults');
 const Archiver = require('./archiver');
 const RPC = require('./rpc');
 const PeerConnector = require('./peers');
+const GCJob = require('./memory').GCJob;
 
 const common = require('./common');
 const logger = require('./logger').logger;
+
+/* Constants */
+const SHARE_DOWNLOADS = false;
+const SWEEP_INTERVAL = 1800 * 1000; // 30 mins in ms
+const SWEEP_LIFETIME = 3600 * 24 * 3 * 1000; // 3 days in ms
 
 /* Unlimited event listeners */
 process.setMaxListeners(0);
 /* Log SIGPIPE errors */
 process.on('SIGPIPE', () =>
-    logger.error("broken pipe"));
+    logger.debug("broken pipe"));
 
 
 function HyperG(options) {
     var self = this;
+
+    logger.info(common.application,
+                '[' + common.version + ']');
 
     self.options = Object.assign({
         host: '0.0.0.0',
         port: 3282,
         rpc_host: 'localhost',
         rpc_port: 3292,
-        db: './' + common.application + '.db'
+        db: './' + common.application + '.db',
+        sweep_interval: SWEEP_INTERVAL,
+        sweep_lifetime: SWEEP_LIFETIME,
+        share_downloads: Boolean(SHARE_DOWNLOADS)
     }, options);
+
+    logger.debug('Configuration', self.options);
 
     self.archiver = new Archiver(self.options);
     self.rpc = new RPC(self, self.options.rpc_port,
@@ -50,8 +64,10 @@ function HyperG(options) {
         })
     ));
 
-    self.networks = [];
     self.running = false;
+    self.sweepJob = null;
+    self.gcJob = null;
+    self.shareTimeouts = {};
 }
 
 HyperG.exit = function(message, code) {
@@ -59,6 +75,7 @@ HyperG.exit = function(message, code) {
         code = code || 1;
         logger.error(message);
     }
+
     process.exit(code);
 };
 
@@ -72,15 +89,19 @@ HyperG.prototype.run = function() {
     if (self.running) return;
     self.running = true;
 
+    self.sweep();
+    self.sweepJob = setInterval(() => self.sweep(),
+                                self.options.sweep_interval);
+
+    self.gcJob = new GCJob();
+    self.gcJob.start();
+
     self.swarm.once('error', HyperG.exit);
     self.swarm.once('listening', () =>
         self.rpc.listen(self.options.rpc_port,
                         self.options.rpc_host)
             .then(() => {
                 var addresses = self.addresses(self.swarm);
-
-                logger.info(common.application,
-                            '[' + common.version + ']');
 
                 if ('TCP' in addresses)
                     logger.info('TCP listening on',
@@ -103,13 +124,13 @@ HyperG.prototype.run = function() {
     });
 };
 
-HyperG.prototype.upload = function(id, files, discoveryKey) {
+HyperG.prototype.upload = function(files, discoveryKey, timeout) {
     if (discoveryKey)
-        return this.uploadArchive(discoveryKey);
-    return this.uploadFiles(files);
+        return this.uploadArchive(discoveryKey, timeout);
+    return this.uploadFiles(files, timeout);
 };
 
-HyperG.prototype.uploadFiles = function(files) {
+HyperG.prototype.uploadFiles = function(files, timeout) {
     var self = this;
 
     return new Promise((cb, eb) => {
@@ -122,9 +143,11 @@ HyperG.prototype.uploadFiles = function(files) {
                 if (error) return eb(error);
 
                 const key = archive.key.toString('hex');
+                self.archiver.addTimestamp(key);
                 self.swarm.join(archive.discoveryKey);
 
                 logger.info('Sharing', key);
+                self._setShareTimeout(key, timeout);
                 cb(key);
             });
 
@@ -132,53 +155,96 @@ HyperG.prototype.uploadFiles = function(files) {
     });
 };
 
-HyperG.prototype.uploadArchive = function(key) {
+HyperG.prototype.uploadArchive = function(key, timeout) {
     var self = this;
 
     const discoveryBuffer = discovery(key);
     const discoveryKey = discoveryBuffer.toString('hex');
 
     return new Promise((cb, eb) => {
-        eb = loggingEb(eb);
+        eb = loggingEb(eb, true);
 
         self.archiver.stat(discoveryKey, error => {
-            if (error) return eb(error);
+            if (error) return eb(String(error));
 
             logger.info("Sharing (cached)", key);
             self.swarm.join(discoveryKey);
+            self._setShareTimeout(key, timeout);
             cb(key);
         });
     });
 };
 
-HyperG.prototype.download = function(key, destination, peers) {
+HyperG.prototype._setShareTimeout = function(key, timeout) {
     var self = this;
 
+    if (!timeout) return;
+    const timeMargin = 5000;
+
+    if (this.shareTimeouts[key])
+        clearTimeout(this.shareTimeouts[key]);
+
+    logger.debug(`${key} timeout: ${timeout + timeMargin}`);
+    setTimeout(() => self.cancel(key), timeout + timeMargin);
+}
+
+HyperG.prototype.download = function(key, destination, peers,
+                                     size, timeout) {
+    var self = this;
+
+    let noDiscovery = Array.isArray(peers) && peers.length > 0;
+    let sharing = self.options.share_downloads;
     let archive = self.archiver.drive.createArchive(key);
     let options = Object.assign({}, self.swarmOptions, {
         id: archive.id || discovery(key),
+        discovery: !noDiscovery,
         stream: peer => archive.replicate({
             download: true,
-            upload: false
+            upload: sharing
         })
     });
 
     let downloadSwarm = new Swarm(new SwarmDefaults(options));
-    let noDiscovery = Array.isArray(peers) && peers.length > 0;
-    console.log("noDiscovery", noDiscovery);
+    let downloadTimeout = null;
 
-    return new Promise((cb, peb) => {
-        let eb = loggingEb(error => {
-            this.cancel(key);
+    const cleanupSwarm = () => {
+        downloadSwarm.leave(archive.discoveryKey);
+        archive.close(() => {
+            logger.debug('Closing swarm', key);
+            self.closeSwarm(downloadSwarm);
+        });
+    };
+    const cleanupTimeout = () => {
+        if (!downloadTimeout) return;
+        clearTimeout(downloadTimeout);
+        downloadTimeout = null;
+    };
+
+    return new Promise((pcb, peb) => {
+        const cb = files => {
+            cleanupTimeout(); cleanupSwarm();
+            pcb(files);
+        };
+        const eb = loggingEb(error => {
+            cleanupTimeout(); cleanupSwarm();
             peb(error);
         });
 
         let peerConnector = noDiscovery
             ? new PeerConnector(downloadSwarm, key, eb)
             : null;
+        downloadTimeout = timeout
+            ? setTimeout(eb, timeout, `${key} download ` +
+                         `timed out after ${timeout / 1000.0} s`)
+            : null;
 
         const onOpen = error => {
             if (error) return eb(error);
+            if (size && archive.content.bytes > size) {
+                error = new Error(`Archive ${key} exceeds the ` +
+                                  `maximum size of ${size} bytes`)
+                return eb(error);
+            }
 
             logger.debug('Saving files', key);
             self.archiver.copyArchive(archive, destination,
@@ -192,13 +258,17 @@ HyperG.prototype.download = function(key, destination, peers) {
                 logger.info('Downloaded', key);
                 cb(files);
 
-                downloadSwarm.leave(archive.discoveryKey);
-                archive.close(() => {
-                    logger.debug('Closing swarm', key);
-                    self.closeSwarm(downloadSwarm);
-                });
+                if (sharing) {
+                    self.archiver.addTimestamp(key);
+                    self.swarm.join(archive.discoveryKey);
+                }
             });
         };
+
+        // `discovery-swarm` requeues a peer when its connection
+        // closes, causing an infinite connection loop.
+        if (noDiscovery)
+            downloadSwarm._requeue = () => {};
 
         downloadSwarm.once('error', eb);
         downloadSwarm.once('listening', () => {
@@ -220,6 +290,7 @@ HyperG.prototype.download = function(key, destination, peers) {
                 logger.debug('Looking up', key);
                 downloadSwarm.join(archive.discoveryKey);
             }
+
             archive.open(onOpen);
         });
 
@@ -258,11 +329,41 @@ HyperG.prototype.cancel = function(key) {
         eb = loggingEb(eb);
 
         self.swarm.leave(discoveryBuffer);
+        self.archiver.removeTimestamp(key);
         self.archiver.remove(discoveryKey, error => {
             if (error) return eb(error);
-            logger.info("Canceling", key);
+            logger.info("Removing", key);
             cb(key);
         });
+    });
+};
+
+HyperG.prototype.sweep = function() {
+    let self = this;
+    let now = new Date().getTime();
+    let keys = [];
+    let lifetime = self.options.sweep_lifetime;
+
+    logger.debug('Sweeping feeds older than', lifetime / 1000, 's');
+
+    self.archiver.timestamps.createReadStream({
+        keys: true,
+        values: true
+    }).on('data', data => {
+        try {
+            let deadline = parseInt(data.value) + lifetime;
+            if (deadline < now) {
+                keys.push(data.key.toString('hex'));
+            }
+        } catch (err) {
+            logger.debug('Sweep: error parsing db entry:', err)
+        }
+    }).on('close', () => {
+        let loop = () => {
+            if (!keys.length) return;
+            self.cancel(keys.shift())
+                .then(loop);
+        }; loop();
     });
 };
 
@@ -327,10 +428,11 @@ function discovery(value) {
     return hash.discoveryKey(buffer(value));
 }
 
-function loggingEb(eb) {
-    return error => {
-        logger.error(error);
-        eb(error);
+function loggingEb(eb, warn) {
+    return msg => {
+        if (warn) logger.warn(msg);
+        else logger.error(msg);
+        eb(msg);
     };
 }
 

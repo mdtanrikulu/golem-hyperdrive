@@ -2,33 +2,35 @@ const ip = require('ip');
 const logger = require('./logger').logger;
 
 
-const toId = peer => peer.host + ':' + peer.port;
 const toObject = entry => ({
     host: entry.TCP[0],
-    port: parseInt(entry.TCP[1])
+    port: parseInt(entry.TCP[1]) || null
 });
 
-const oneShot = func => {
-    var result = function() {
-        if (this.func) {
-            let f = this.func;
-            this.func = null;
-            return f.apply(null, arguments);
-        }
-    };
+const toId = peer => peer.host + ':' + peer.port;
 
-    result.func = func;
-    return result;
-};
+const filter = peer => {
+    let host = peer.host;
+    let port = peer.port;
+
+    if (!ip.isV4Format(host) && !ip.isV6Format(host))
+        return false;
+    if (port < 1 || port > 65535)
+        return false;
+    return true;
+}
 
 
 function PeerConnector(swarm, key, eb) {
     this.swarm = swarm;
     this.channel = key;
-    this.eb = oneShot(eb);
-
     this.peers = new Set();
     this.dropped = 0;
+
+    this.eb = error => {
+        logger.error(error);
+        eb(error);
+    };
 
     this.swarm.on('drop', peer => {
         let exists = this.peers.has(toId(peer));
@@ -38,35 +40,32 @@ function PeerConnector(swarm, key, eb) {
 }
 
 PeerConnector.prototype.connect = function(peers) {
-    console.log("peers", peers);
     try {
-        logger.debug('Connecting to peers', this.key, peers);
+        let converted = (peers || []).map(toObject);
+        let filtered = converted.filter(filter);
 
-        peers = (peers || []).map(toObject);
-        peers.forEach(this._validate);
-        peers.forEach(this._connect);
+        if (!filtered || filtered.length == 0)
+            throw new Error("Invalid peers: " + JSON.stringify(peers));
+
+        logger.info('Connecting to peers', this.channel, filtered);
+        filtered.forEach(peer => this._connect(peer));
     } catch (exc) {
+        exc.message = exc.message || exc.name || String(exc);
         this.eb(exc.message);
     }
 };
 
 PeerConnector.prototype._connect = function(peer) {
-    let peerId = toId(peer);
-    if (this.peers.has(peerId))
+    let id = toId(peer);
+    if (this.peers.has(id))
         return;
 
-    this.peers.add(peerId);
-    this.swarm._discovery.emit('peer', this.channel, peer, 'dht');
-};
+    peer.id = id;
+    peer.retries = 0;
+    peer.channel = this.channel;
 
-PeerConnector.prototype._validate = function(peer) {
-    let host = peer.host;
-    let port = peer.port;
-
-    if (!ip.isV4Format(host) && !ip.isV6Format(host))
-        throw new Error('Invalid address:', host);
-    if (port < 1 || port > 65535)
-        throw new Error('Invalid port:', port);
+    this.peers.add(id);
+    this.swarm.addPeer(new Buffer(this.channel, 'hex'), peer);
 };
 
 

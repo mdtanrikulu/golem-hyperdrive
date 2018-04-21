@@ -18,6 +18,8 @@ var options = minimist(
 function usage() {
     let s = "\t\t\t\t";
     console.log(common.application + " usage:", "\n");
+    console.log("  --db [path]");
+    console.log(s, "Database path");
     console.log("  --host [ip]");
     console.log(s, "IP address to listen on");
     console.log("  --port [int]");
@@ -26,6 +28,10 @@ function usage() {
     console.log(s, "IP address for RPC to listen on");
     console.log("  --rpc_port [int]");
     console.log(s, "TCP port for RPC to listen on");
+    console.log("  --sweep_interval [int]");
+    console.log(s, "Database sweep interval in seconds");
+    console.log("  --sweep_lifetime [int]");
+    console.log(s, "Database lifetime of shares in seconds");
     console.log("  --logfile [path]");
     console.log(s, "Log to file");
     console.log("  --loglevel [error|warn|info|verbose|debug]");
@@ -41,18 +47,13 @@ if (options.v || options.version)
 if (options.h || options.help)
     return usage();
 
-if (options.logfile) {
-    logger.info('Opening HyperG log file:', options.logfile);
-    logger.add(
-        winston.transports.File,
-        {
-            filename: options.logfile,
-            json: false,
-            timestamp: logger_module.timestamp,
-            formatter: logger_module.formatter
-        }
-    );
+if (options.sweep_lifetime) {
+    let lifetime = parseInt(options.sweep_lifetime);
+    options.sweep_lifetime = Math.max(lifetime, 0) * 1000;
 }
+
+if (options.logfile)
+    logger_module.addFileTransport(options.logfile);
 if (options.loglevel)
     logger_module.setLevel(options.loglevel);
 

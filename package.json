@@ -1,7 +1,7 @@
 {
   "name": "golem-hyperdrive",
   "shortName": "HyperG",
-  "version": "0.2.3",
+  "version": "0.2.6",
   "description": "Hyperdrive client for the Golem project",
   "author": {
     "name": "Marek Franciszkiewicz",
@@ -26,8 +26,9 @@
     "assets": "./node_modules/hyperdrive-encoding/schema.proto"
   },
   "scripts": {
-    "start": "node src/index.js",
     "start:client": "node src/client.js",
+    "start": "node --expose-gc --max-old-space-size=3072 src/index.js",
+    "start:debug": "node --expose-gc --max-old-space-size=3072 src/index.js --loglevel debug",
     "archive": "node build.js archive",
     "build": "node build.js build",
     "clean": "node build.js clean",
@@ -58,7 +59,7 @@
     "ip": "^1.1.5"
   },
   "devDependencies": {
-    "pkg": "3.0.4",
+    "pkg": "4.3.0",
     "archiver": "1.3.0",
     "node-abi": "2.0.2"
   }

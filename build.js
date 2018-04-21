@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
+const os = require('os');
+const fs = require('fs');
+
 const abi = require('node-abi');
 const archiver = require('archiver');
 const spawn = require('child_process').spawn;
-const fs = require('fs');
 const mkdirp = require('mkdirp');
-const os = require('os');
 const rimraf = require('rimraf');
+
+const flags = require('./build_flags');
 const package = require('./package.json');
 
 const ABI = abi.getAbi();
@@ -124,8 +127,18 @@ Build.build = (source, output) => {
     if (platform == 'win32')
         output += '.exe';
 
-    var args = ['node_modules/pkg/lib-es5/bin.js',
-                '-c', 'package.json', '-o', output, source];
+    var args = [
+        'node_modules/pkg/lib-es5/bin.js'
+    ];
+
+    if (flags && flags.length)
+        args.push.apply(args, flags);
+
+    args.push.apply(args, [
+        '-c', 'package.json',
+        '-o', output,
+        source
+    ]);
 
     console.log(`> Building executable for ${source}`)
     console.log(`> ${args.join(' ')}`)

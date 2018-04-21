@@ -3,6 +3,8 @@ const hash = require('hypercore/lib/hash');
 const mkdirp = require('mkdirp');
 const path = require('path');
 const pump = require('pump');
+const subleveldown = require('subleveldown');
+const util = require('util');
 
 const Feed = require('hypercore/lib/feed');
 const Hyperdrive = require('hyperdrive');
@@ -32,6 +34,13 @@ function Archiver(options, streamOptions) {
 
     this.db = Level(options.db);
     this.drive = Hyperdrive(this.db);
+    this.timestamps = subleveldown(
+        this.db, 'timestamps',
+        {
+            keyEncoding: 'ascii',
+            valueEncoding: 'ascii'
+        }
+    );
 
     this.options = options;
     this.streamOptions = Object.assign({
@@ -83,12 +92,62 @@ Archiver.prototype.create = function(files, cb) {
 };
 
 Archiver.prototype.remove = function(discoveryKey, cb) {
+    var self = this;
+    let core = self.drive.core;
+    let formats = [
+        '!signatures!!%s!',
+        '!bitfields!!%s!',
+        '!nodes!!%s!',
+        '!feeds!!%s!',
+        '!data!!%s!'
+    ];
 
-    var core = this.drive.core;
-    core._feeds.del(discoveryKey, error => {
-        cb(error, discoveryKey);
+    self.stat(discoveryKey, (error, feedInfo) => {
+        if (error) return cb(error, discoveryKey);
+
+        let archive = self.drive.createArchive(discoveryKey, feedInfo)
+        archive.open(error => {
+            if (error) return cb(error, discoveryKey);
+
+            let metadata_prefix = (archive.metadata.prefix || '')
+                .toString('hex');
+            let content_prefix = (archive.content.prefix || '')
+                .toString('hex');
+
+            let loop = () => {
+                if (!formats.length) return cb(null, discoveryKey);
+
+                let format = formats.shift();
+                let metadata_key = util.format(format, metadata_prefix);
+                let content_key = util.format(format, content_prefix);
+
+                self._remove_prefix(
+                    metadata_key,
+                    core._db,
+                    () => self._remove_prefix(content_key, core._db, loop)
+                );
+            }; loop();
+        });
     });
 };
+
+Archiver.prototype._remove_prefix = function(prefix, db, cb) {
+    db.createKeyStream({
+        gte: prefix,
+        lt: prefix + '~',
+        keyEncoding: 'utf8',
+    })
+    .on('data', key => {
+        db.del(key, error => {
+            if (error)
+                logger.debug(`Error removing ${prefix}: ${error}`);
+        });
+    })
+    .on('close', () => {
+        logger.debug(`Prefix ${prefix} removed`);
+        setTimeout(cb, 0);
+    });
+}
 
 Archiver.prototype.replicate = function(peer) {
     var self = this;
@@ -100,11 +159,12 @@ Archiver.prototype.replicate = function(peer) {
     stream.on('open', discoveryBuffer => {
         var discoveryKey = discoveryBuffer.toString('hex');
 
-        logger.debug('Archive requested', discoveryKey, peer);
+        logger.debug('Feed requested', discoveryKey, peer);
 
         self.stat(discoveryKey, (error, feedInfo) => {
             if (error)
-                return logger.debug('Upload error:', error);
+                return logger.debug('Replication error:',
+                                    JSON.stringify(error));
 
             var feed = self.createFeed(feedInfo);
             logger.debug("Uploading", feed.key.toString('hex'));
@@ -127,6 +187,17 @@ Archiver.prototype.createFeed = function(feedInfo) {
 Archiver.prototype.copyArchive = function(archive, destination, cb) {
     Entries.save(archive, destination, cb);
 };
+
+Archiver.prototype.addTimestamp = function(key) {
+    let now = new Date().getTime();
+    this.timestamps.put(key, String(now));
+};
+
+Archiver.prototype.removeTimestamp = function(key) {
+    this.timestamps.del(key, err => {
+        if (err) logger.error('Error removing timestamp for', key);
+    });
+}
 
 
 function Entries() {}
@@ -168,10 +239,12 @@ Entries.save = function(archive, destination, cb) {
 
             const dest = paths[entry.name];
 
-            if (Entries.exists(archive, entry, dest)) {
-                if (left) return next();
-                return cb(ERR_NONE, files);
-            }
+            if (Entries.exists(archive, entry, dest))
+                try {
+                    fs.unlinkSync(dest);
+                } catch(error) {
+                    logger.error('Cannot remove', dest);
+                }
 
             logger.debug('Saving', entry.name, '->', dest);
 
